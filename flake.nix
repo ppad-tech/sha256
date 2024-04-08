@@ -14,36 +14,34 @@
         pkgs = import nixpkgs { inherit system; };
         hlib = pkgs.haskell.lib;
 
-        hpkgs = pkgs.haskell.packages.ghc964;
-        # hpkgs = pkgs.haskell.packages.ghc964.override {
-        #   overrides = new: old: {
-        #     ${lib} = old.callCabal2nix lib ./. {};
-        #   };
-        # };
+        hpkgs = pkgs.haskell.packages.ghc964.override {
+          overrides = new: old: {
+            ${lib} = old.callCabal2nix lib ./. {};
+          };
+        };
 
         cc    = pkgs.stdenv.cc;
         ghc   = hpkgs.ghc;
         cabal = hpkgs.cabal-install;
       in
         {
-          # packages.${lib} = hpkgs.${lib};
+          packages.${lib} = hpkgs.${lib};
 
-          # defaultPackage = self.packages.${system}.${lib};
+          defaultPackage = self.packages.${system}.${lib};
 
           devShells.default = hpkgs.shellFor {
-            packages = p: [ ];
-            # packages = p: [
-            #   (hlib.doBenchmark p.${lib})
-            # ];
+            packages = p: [
+              (hlib.doBenchmark p.${lib})
+            ];
 
             buildInputs = [
               cabal
               cc
             ];
 
-            # inputsFrom = builtins.attrValues self.packages.${system};
+            inputsFrom = builtins.attrValues self.packages.${system};
 
-            # doBenchmark = true;
+            doBenchmark = true;
 
             shellHook = ''
               PS1="[${lib}] \w$ "
