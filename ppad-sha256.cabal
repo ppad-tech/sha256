@@ -12,7 +12,7 @@ tested-with:        GHC == { 9.6.4 }
 extra-doc-files:    CHANGELOG
 description:
   A pure Haskell implementation of the SHA-256 hashing algorithm as
-  specified by e.g. NIST FIPS 180-4 or RFC4634.
+  specified by e.g. NIST FIPS 180-4 or RFC6234.
 
 source-repository head
   type:     git
