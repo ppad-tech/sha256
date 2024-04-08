@@ -1,0 +1,30 @@
+cabal-version:      3.0
+name:               ppad-sha256
+version:            0.1.0
+synopsis:           The SHA-256 hashing algorithm
+license:            MIT
+license-file:       LICENSE
+author:             Jared Tobin
+maintainer:         jared@ppad.tech
+category:           Cryptography
+build-type:         Simple
+tested-with:        GHC == { 9.6.4 }
+extra-doc-files:    CHANGELOG
+description:
+  A pure Haskell implementation of the SHA-256 hashing algorithm as
+  specified by e.g. NIST FIPS 180-4 or RFC4634.
+
+source-repository head
+  type:     git
+  location: git.ppad.tech/sha256.git
+
+library
+  default-language: Haskell2010
+  hs-source-dirs:   lib
+  ghc-options:
+      -Wall
+  exposed-modules:
+      Crypto.SHA256
+  build-depends:
+      base
+
