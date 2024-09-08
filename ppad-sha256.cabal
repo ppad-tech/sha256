@@ -24,7 +24,9 @@ library
   ghc-options:
       -Wall
   exposed-modules:
-      Crypto.SHA256
+      Crypto.Hash.SHA256
   build-depends:
       base
+    , binary
+    , bytestring
 
