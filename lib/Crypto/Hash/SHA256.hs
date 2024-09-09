@@ -6,20 +6,32 @@
 module Crypto.Hash.SHA256 where
 
 import qualified Data.Bits as B
-import Data.Bits ((.&.))
+import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
-import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Unsafe as BU
 import Data.Word (Word32, Word64)
+
+-- utilities
 
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 
+-- from Data.Binary
+word32be :: BS.ByteString -> Word32
+word32be s =
+  (fromIntegral (s `BU.unsafeIndex` 0) `B.unsafeShiftL` 24) .|.
+  (fromIntegral (s `BU.unsafeIndex` 1) `B.unsafeShiftL` 16) .|.
+  (fromIntegral (s `BU.unsafeIndex` 2) `B.unsafeShiftL`  8) .|.
+  (fromIntegral (s `BU.unsafeIndex` 3))
+{-# INLINE word32be #-}
+
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
 
-pad :: BSL.ByteString -> BSL.ByteString
-pad (BSL.toChunks -> m) = con 0 mempty m where
+pad :: BL.ByteString -> BL.ByteString
+pad (BL.toChunks -> m) = con 0 mempty m where
   -- consume input, calculating bytelength and accumulating result
   con !l acc = \case
     (c:cs) ->
@@ -64,12 +76,12 @@ bsig1 :: Word32 -> Word32
 bsig1 x = B.rotateR x 6 `B.xor` B.rotateR x 11 `B.xor` B.rotateR x 25
 
 ssig0 :: Word32 -> Word32
-ssig0 x = B.rotateR x 7 `B.xor` B.rotateR x 18 `B.xor` B.shiftR x 3
+ssig0 x = B.rotateR x 7 `B.xor` B.rotateR x 18 `B.xor` B.unsafeShiftR x 3
 
 ssig1 :: Word32 -> Word32
-ssig1 x = B.rotateR x 17 `B.xor` B.rotateR x 19 `B.xor` B.shiftR x 10
+ssig1 x = B.rotateR x 17 `B.xor` B.rotateR x 19 `B.xor` B.unsafeShiftR x 10
 
-data SHA256 = SHA256
+data Schedule = Schedule
     !Word32 !Word32 !Word32 !Word32
     !Word32 !Word32 !Word32 !Word32
     !Word32 !Word32 !Word32 !Word32
@@ -90,8 +102,8 @@ data SHA256 = SHA256
 
 -- first 32 bits of the fractional parts of the cube roots of the first
 -- sixty-four primes
-sha256_constants :: SHA256
-sha256_constants = SHA256
+sha256_constants :: Schedule
+sha256_constants = Schedule
   0x428a2f98 0x3956c25b 0xd807aa98 0x72be5d74
   0xe49b69c1 0x2de92c6f 0x983e5152 0xc6e00bf3
   0x27b70a85 0x650a7354 0xa2bfe8a1 0xd192e819
@@ -112,15 +124,15 @@ sha256_constants = SHA256
 -- initialization
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-6.1
 
-data SHA256S = SHA256S
+data Registers = Registers
     !Word32 !Word32 !Word32 !Word32
     !Word32 !Word32 !Word32 !Word32
   deriving (Eq, Show)
 
 -- first 32 bits of the fractional parts of the square roots of the
 -- first eight primes
-sha256_iv :: SHA256S
-sha256_iv = SHA256S
+sha256_iv :: Registers
+sha256_iv = Registers
   0x6a09e667 0xbb67ae85 0x3c6ef372 0xa54ff53a
   0x510e527f 0x9b05688c 0x1f83d9ab 0x5be0cd19
 
