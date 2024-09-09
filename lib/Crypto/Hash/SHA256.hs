@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -funbox-small-strict-fields #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -257,7 +258,7 @@ prepare_schedule Block {..} = Schedule {..} where
 -- 6.2 steps 2, 3
 block_hash :: Registers -> Schedule -> Registers
 block_hash r@Registers {..} s = loop 0 r where
-  loop t (Registers a b c d e f g h)
+  loop t !(Registers a b c d e f g h)
     | t == 64 = Registers {
           h0 = a + h0, h1 = b + h1, h2 = c + h2, h3 = d + h3
         , h4 = e + h4, h5 = f + h5, h6 = g + h6, h7 = h + h7
@@ -287,9 +288,8 @@ hash :: BS.ByteString -> BS.ByteString
 hash =
       cat
     . L.foldl' alg iv
-    . fmap parse
     . chunks 64
     . pad
   where
-    alg acc = block_hash acc . prepare_schedule
+    alg acc = block_hash acc . prepare_schedule . parse
 
