@@ -3,7 +3,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Crypto.Hash.SHA256 where
+module Crypto.Hash.SHA256 (
+    hash
+  ) where
 
 import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
@@ -19,7 +21,7 @@ import Data.Word (Word32, Word64)
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 
--- break a bytestring into chunks of the specified size.
+-- break a bytestring into chunks of the specified bytelength
 chunks :: Int -> BS.ByteString -> [BS.ByteString]
 chunks s = loop where
   loop bs
@@ -161,6 +163,7 @@ data Block = Block {
   , m12 :: !Word32, m13 :: !Word32, m14 :: !Word32, m15 :: !Word32
   } deriving (Eq, Show)
 
+-- parse a 512-bit block into sixteen 32-bit words
 parse :: BS.ByteString -> Block
 parse bs =
   let (word32be -> m00, t00) = BS.splitAt 4 bs
@@ -281,12 +284,12 @@ cat Registers {..} = BS.toStrict . BSB.toLazyByteString $ mconcat [
 -- | Compute a condensed representation of a strict bytestring via
 --   SHA-256.
 hash :: BS.ByteString -> BS.ByteString
-hash (pad -> m) =
+hash =
       cat
     . L.foldl' alg iv
     . fmap parse
     . chunks 64
-    $ m
+    . pad
   where
     alg acc = block_hash acc . prepare_schedule
 
