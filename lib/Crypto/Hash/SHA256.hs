@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -funbox-small-strict-fields #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
