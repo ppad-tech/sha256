@@ -31,11 +31,7 @@ fi = fromIntegral
 
 -- break a bytestring into blocks of the specified bytelength
 blocks :: Int -> BS.ByteString -> [BS.ByteString]
-blocks s = loop where
-  loop bs
-    | BS.null bs = []
-    | otherwise = case BS.splitAt (fi s) bs of
-        (c, r) -> c : loop r
+blocks s = blocks_lazy s . BL.fromStrict
 
 blocks_lazy :: Int -> BL.ByteString -> [BS.ByteString]
 blocks_lazy s = loop where
@@ -57,19 +53,7 @@ word32be s =
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
 
 pad :: BS.ByteString -> BS.ByteString
-pad m = BS.toStrict . BSB.toLazyByteString $
-    loop (BSB.byteString m <> BSB.word8 0x80) k
-  where
-    l = fi (BS.length m)
-
-    -- k such that (l + 1 + k) mod 64 = 56
-    k :: Word64
-    k = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
-        in  fi (if r < 0 then r + 64 else r)
-
-    loop acc j
-      | j == 0 = acc <> BSB.word64BE (l * 8)
-      | otherwise = loop (acc <> BSB.word8 0x00) (pred j)
+pad = BL.toStrict . pad_lazy . BL.fromStrict
 
 pad_lazy :: BL.ByteString -> BL.ByteString
 pad_lazy (BL.toChunks -> m) = con 0 mempty m where
@@ -348,18 +332,7 @@ hash_lazy =
 -- | Produce a message authentication code for a strict bytestring,
 --   based on the provided key, via SHA-256.
 hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
-hmac k text
-    | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
-    | otherwise =
-        let step1 = k <> BS.replicate (64 - lk) 0x00
-            step2 = BS.map (B.xor 0x36) step1
-            step3 = step2 <> text
-            step4 = hash step3
-            step5 = BS.map (B.xor 0x5C) step1
-            step6 = step5 <> step4
-        in  hash step6
-  where
-    lk = BS.length k
+hmac k = hmac_lazy k . BL.fromStrict
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided key, via SHA-256.
