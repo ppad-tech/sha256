@@ -6,6 +6,7 @@
 
 module Crypto.Hash.SHA256 (
     hash
+  , hash_lazy
   ) where
 
 import qualified Data.Bits as B
@@ -28,8 +29,15 @@ blocks :: Int -> BS.ByteString -> [BS.ByteString]
 blocks s = loop where
   loop bs
     | BS.null bs = []
-    | otherwise = case BS.splitAt s bs of
+    | otherwise = case BS.splitAt (fi s) bs of
         (c, r) -> c : loop r
+
+blocks_lazy :: Int -> BL.ByteString -> [BS.ByteString]
+blocks_lazy s = loop where
+  loop bs
+    | BL.null bs = []
+    | otherwise = case BL.splitAt (fi s) bs of
+        (c, r) -> BL.toStrict c : loop r
 
 -- verbatim from Data.Binary
 word32be :: BS.ByteString -> Word32
@@ -42,29 +50,6 @@ word32be s =
 
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
-
-pad_lazy :: BL.ByteString -> BL.ByteString
-pad_lazy (BL.toChunks -> m) = con 0 mempty m where
-  con !l acc = \case
-    (c:cs) ->
-      let nl = l + fi (BS.length c)
-          nacc = acc <> BSB.byteString c
-      in  con nl nacc cs
-
-    [] ->
-      let k = sol l
-          don = fin l k (acc <> BSB.word8 0x80)
-      in  BSB.toLazyByteString don
-
-  sol :: Word64 -> Word64
-  sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
-          in  fi (if r < 0 then r + 64 else r)
-
-  fin l k acc
-    | k == 0 = acc <> BSB.word64BE (l * 8)
-    | otherwise =
-        let nacc = acc <> BSB.word8 0x00
-        in  fin l (pred k) nacc
 
 pad :: BS.ByteString -> BS.ByteString
 pad m = BS.toStrict . BSB.toLazyByteString $
@@ -80,6 +65,30 @@ pad m = BS.toStrict . BSB.toLazyByteString $
     loop acc j
       | j == 0 = acc <> BSB.word64BE (l * 8)
       | otherwise = loop (acc <> BSB.word8 0x00) (pred j)
+
+pad_lazy :: BL.ByteString -> BL.ByteString
+pad_lazy (BL.toChunks -> m) = con 0 mempty m where
+  con !l acc = \case
+    (c:cs) ->
+      let nl = l + fi (BS.length c)
+          nacc = acc <> BSB.byteString c
+      in  con nl nacc cs
+
+    [] ->
+      let k = sol l
+          don = fin l k (acc <> BSB.word8 0x80)
+      in  BSB.toLazyByteString don
+
+  -- k such that (l + 1 + k) mod 64 = 56
+  sol :: Word64 -> Word64
+  sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
+          in  fi (if r < 0 then r + 64 else r)
+
+  fin l k acc
+    | k == 0 = acc <> BSB.word64BE (l * 8)
+    | otherwise =
+        let nacc = acc <> BSB.word8 0x00
+        in  fin l (pred k) nacc
 
 -- functions and constants used
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-5.1
@@ -295,7 +304,7 @@ block_hash r@Registers {..} s = loop 0 r where
 
 -- 6.2 step 4
 cat :: Registers -> BS.ByteString
-cat Registers {..} = BS.toStrict . BSB.toLazyByteString $ mconcat [
+cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
     BSB.word32BE h0
   , BSB.word32BE h1
   , BSB.word32BE h2
@@ -314,6 +323,17 @@ hash =
     . L.foldl' alg iv
     . blocks 64
     . pad
+  where
+    alg acc = block_hash acc . prepare_schedule . parse
+
+-- | Compute a condensed representation of a lazy bytestring via
+--   SHA-256.
+hash_lazy :: BL.ByteString -> BS.ByteString
+hash_lazy =
+      cat
+    . L.foldl' alg iv
+    . blocks_lazy 64
+    . pad_lazy
   where
     alg acc = block_hash acc . prepare_schedule . parse
 
