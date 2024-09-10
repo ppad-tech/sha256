@@ -34,7 +34,7 @@ lazy ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104].
 > -- you can use third-party libraries for rendering if necessary
 > -- e.g., using base16-bytestring:
 >
-> import qualified Data.ByteString.Base16
+> import qualified Data.ByteString.Base16 as B16
 >
 > B16.encode hash_s
 "31df9848611f42ab5607ea9e6de84b05d5259085abb30a7917d85efcda42b0e3"
