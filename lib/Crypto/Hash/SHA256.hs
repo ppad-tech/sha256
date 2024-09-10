@@ -4,6 +4,17 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
+-- |
+-- Module: Crypto.Hash.SHA256
+-- Copyright: (c) 2024 Jared Tobin
+-- License: MIT
+-- Maintainer: Jared Tobin <jared@ppad.tech>
+--
+-- Pure SHA-256 and HMAC-SHA256 implementations for
+-- strict and lazy ByteStrings, as specified by RFC's
+-- [6234](https://datatracker.ietf.org/doc/html/rfc6234) and
+-- [2104](https://datatracker.ietf.org/doc/html/rfc2104).
+
 module Crypto.Hash.SHA256 (
   -- SHA
     hash
