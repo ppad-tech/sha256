@@ -8,7 +8,7 @@ author:             Jared Tobin
 maintainer:         jared@ppad.tech
 category:           Cryptography
 build-type:         Simple
-tested-with:        GHC == { 9.6.6, 9.6.4 }
+tested-with:        GHC == { 9.8.1, 9.6.6, 9.6.4 }
 extra-doc-files:    CHANGELOG
 description:
   A pure implementation of SHA-256 and HMAC-SHA256 on strict and lazy
@@ -36,10 +36,11 @@ test-suite sha256-tests
   main-is:             Main.hs
 
   ghc-options:
-    -rtsopts -Wall
+    -rtsopts -Wall -O2
 
   build-depends:
       base
+    , base16-bytestring
     , bytestring
     , ppad-sha256
     , tasty
