@@ -293,7 +293,7 @@ prepare_schedule Block {..} = Schedule {..} where
   w62 = ssig1 w60 + w55 + ssig0 w47 + w46
   w63 = ssig1 w61 + w56 + ssig0 w48 + w47
 
--- RFC 6234 6.2 steps 2, 3
+-- RFC 6234 6.2 steps 2, 3, 4
 block_hash :: Registers -> Schedule -> Registers
 block_hash r@Registers {..} s = loop 0 r where
   loop t !(Registers a b c d e f g h)
@@ -307,7 +307,11 @@ block_hash r@Registers {..} s = loop 0 r where
             nacc = Registers (t1 + t2) a b c (d + t1) e f g
         in  loop (succ t) nacc
 
--- RFC 6234 6.2 step 4
+-- RFC 6234 6.2 block pipeline
+hash_alg :: Registers -> BS.ByteString -> Registers
+hash_alg rs = block_hash rs . prepare_schedule . parse
+
+-- register concatenation
 cat :: Registers -> BS.ByteString
 cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
     BSB.word32BE h0
@@ -325,22 +329,18 @@ cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
 hash :: BS.ByteString -> BS.ByteString
 hash =
       cat
-    . L.foldl' alg iv
+    . L.foldl' hash_alg iv
     . blocks 64
     . pad
-  where
-    alg acc = block_hash acc . prepare_schedule . parse
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
 hash_lazy :: BL.ByteString -> BS.ByteString
 hash_lazy =
       cat
-    . L.foldl' alg iv
+    . L.foldl' hash_alg iv
     . blocks_lazy 64
     . pad_lazy
-  where
-    alg acc = block_hash acc . prepare_schedule . parse
 
 -- definition of HMAC
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
