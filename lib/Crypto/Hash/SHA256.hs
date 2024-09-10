@@ -310,6 +310,11 @@ cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
 
 -- | Compute a condensed representation of a strict bytestring via
 --   SHA-256.
+--
+--   The 256-bit output digest is returned as a strict bytestring.
+--
+--   >>> hash "strict bytestring input"
+--   "<strict 256-bit message digest>"
 hash :: BS.ByteString -> BS.ByteString
 hash =
       cat
@@ -319,6 +324,11 @@ hash =
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
+--
+--   The 256-bit output digest is returned as a strict bytestring.
+--
+--   >>> hash_lazy "lazy bytestring input"
+--   "<strict 256-bit message digest>"
 hash_lazy :: BL.ByteString -> BS.ByteString
 hash_lazy =
       cat
@@ -326,16 +336,26 @@ hash_lazy =
     . blocks_lazy 64
     . pad_lazy
 
--- definition of HMAC
+-- HMAC
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
 
 -- | Produce a message authentication code for a strict bytestring,
 --   based on the provided key, via SHA-256.
+--
+--   The 256-bit MAC is returned as a strict bytestring.
+--
+--   >>> hmac "strict bytestring key" "strict bytestring input"
+--   "<strict 256-bit MAC>"
 hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
 hmac k = hmac_lazy k . BL.fromStrict
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided key, via SHA-256.
+--
+--   The 256-bit MAC is returned as a strict bytestring.
+--
+--   >>> hmac_lazy "strict bytestring key" "lazy bytestring input"
+--   "<strict 256-bit MAC>"
 hmac_lazy :: BS.ByteString -> BL.ByteString -> BS.ByteString
 hmac_lazy k text
     | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
