@@ -5,8 +5,13 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Crypto.Hash.SHA256 (
+  -- SHA
     hash
   , hash_lazy
+
+  -- HMAC
+  , hmac
+  , hmac_lazy
   ) where
 
 import qualified Data.Bits as B
@@ -220,7 +225,7 @@ parse bs =
       then Block {..}
       else error "ppad-sha256: internal error (bytes remaining)"
 
--- 6.2 step 1
+-- RFC 6234 6.2 step 1
 prepare_schedule :: Block -> Schedule
 prepare_schedule Block {..} = Schedule {..} where
   w00 = m00
@@ -288,7 +293,7 @@ prepare_schedule Block {..} = Schedule {..} where
   w62 = ssig1 w60 + w55 + ssig0 w47 + w46
   w63 = ssig1 w61 + w56 + ssig0 w48 + w47
 
--- 6.2 steps 2, 3
+-- RFC 6234 6.2 steps 2, 3
 block_hash :: Registers -> Schedule -> Registers
 block_hash r@Registers {..} s = loop 0 r where
   loop t !(Registers a b c d e f g h)
@@ -302,7 +307,7 @@ block_hash r@Registers {..} s = loop 0 r where
             nacc = Registers (t1 + t2) a b c (d + t1) e f g
         in  loop (succ t) nacc
 
--- 6.2 step 4
+-- RFC 6234 6.2 step 4
 cat :: Registers -> BS.ByteString
 cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
     BSB.word32BE h0
@@ -336,4 +341,39 @@ hash_lazy =
     . pad_lazy
   where
     alg acc = block_hash acc . prepare_schedule . parse
+
+-- definition of HMAC
+-- https://datatracker.ietf.org/doc/html/rfc2104#section-2
+
+-- | Produce a message authentication code for a strict bytestring,
+--   based on the provided key, via SHA-256.
+hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
+hmac k text
+    | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
+    | otherwise =
+        let step1 = k <> BS.replicate (64 - lk) 0x00
+            step2 = BS.map (B.xor 0x36) step1
+            step3 = step2 <> text
+            step4 = hash step3
+            step5 = BS.map (B.xor 0x5C) step1
+            step6 = step5 <> step4
+        in  hash step6
+  where
+    lk = BS.length k
+
+-- | Produce a message authentication code for a lazy bytestring, based
+--   on the provided key, via SHA-256.
+hmac_lazy :: BS.ByteString -> BL.ByteString -> BS.ByteString
+hmac_lazy k text
+    | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
+    | otherwise =
+        let step1 = BL.fromStrict k <> BL.replicate (64 - lk) 0x00
+            step2 = BL.map (B.xor 0x36) step1
+            step3 = step2 <> text
+            step4 = hash_lazy step3
+            step5 = BL.map (B.xor 0x5C) step1
+            step6 = step5 <> BL.fromStrict step4
+        in  hash_lazy step6
+  where
+    lk = fi (BS.length k)
 
