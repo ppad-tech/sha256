@@ -367,13 +367,13 @@ hmac_lazy :: BS.ByteString -> BL.ByteString -> BS.ByteString
 hmac_lazy k text
     | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
     | otherwise =
-        let step1 = BL.fromStrict k <> BL.replicate (64 - lk) 0x00
-            step2 = BL.map (B.xor 0x36) step1
-            step3 = step2 <> text
+        let step1 = k <> BS.replicate (64 - lk) 0x00
+            step2 = BS.map (B.xor 0x36) step1
+            step3 = BL.fromStrict step2 <> text
             step4 = hash_lazy step3
-            step5 = BL.map (B.xor 0x5C) step1
-            step6 = step5 <> BL.fromStrict step4
-        in  hash_lazy step6
+            step5 = BS.map (B.xor 0x5C) step1
+            step6 = step5 <> step4
+        in  hash step6
   where
     lk = fi (BS.length k)
 
