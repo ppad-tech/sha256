@@ -22,9 +22,9 @@ import Data.Word (Word32, Word64)
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 
--- break a bytestring into chunks of the specified bytelength
-chunks :: Int -> BS.ByteString -> [BS.ByteString]
-chunks s = loop where
+-- break a bytestring into blocks of the specified bytelength
+blocks :: Int -> BS.ByteString -> [BS.ByteString]
+blocks s = loop where
   loop bs
     | BS.null bs = []
     | otherwise = case BS.splitAt s bs of
@@ -288,7 +288,7 @@ hash :: BS.ByteString -> BS.ByteString
 hash =
       cat
     . L.foldl' alg iv
-    . chunks 64
+    . blocks 64
     . pad
   where
     alg acc = block_hash acc . prepare_schedule . parse
