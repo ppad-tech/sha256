@@ -12,6 +12,7 @@ import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.List as L
 import Data.Word (Word32, Word64)
@@ -41,6 +42,29 @@ word32be s =
 
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
+
+pad_lazy :: BL.ByteString -> BL.ByteString
+pad_lazy (BL.toChunks -> m) = con 0 mempty m where
+  con !l acc = \case
+    (c:cs) ->
+      let nl = l + fi (BS.length c)
+          nacc = acc <> BSB.byteString c
+      in  con nl nacc cs
+
+    [] ->
+      let k = sol l
+          don = fin l k (acc <> BSB.word8 0x80)
+      in  BSB.toLazyByteString don
+
+  sol :: Word64 -> Word64
+  sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
+          in  fi (if r < 0 then r + 64 else r)
+
+  fin l k acc
+    | k == 0 = acc <> BSB.word64BE (l * 8)
+    | otherwise =
+        let nacc = acc <> BSB.word8 0x00
+        in  fin l (pred k) nacc
 
 pad :: BS.ByteString -> BS.ByteString
 pad m = BS.toStrict . BSB.toLazyByteString $
