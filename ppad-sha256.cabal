@@ -11,7 +11,8 @@ build-type:         Simple
 tested-with:        GHC == { 9.6.4 }
 extra-doc-files:    CHANGELOG
 description:
-  A pure Haskell implementation of SHA-256 as specified by RFC 6234.
+  A pure implementation of SHA-256 and HMAC-SHA256 on strict and lazy
+  ByteStrings, as specified by RFC's 6234 and 2104.
 
 source-repository head
   type:     git
