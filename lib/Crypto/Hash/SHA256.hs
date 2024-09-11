@@ -16,11 +16,11 @@
 -- [2104](https://datatracker.ietf.org/doc/html/rfc2104).
 
 module Crypto.Hash.SHA256 (
-  -- SHA
+  -- * SHA-256 message digest functions
     hash
   , hash_lazy
 
-  -- HMAC
+  -- * HMAC-SHA256 hash-based MAC functions
   , hmac
   , hmac_lazy
   ) where
