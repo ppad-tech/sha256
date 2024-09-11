@@ -351,7 +351,7 @@ hash_lazy =
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
 
 -- | Produce a message authentication code for a strict bytestring,
---   based on the provided key, via SHA-256.
+--   based on the provided (strict, bytestring) key, via SHA-256.
 --
 --   The 256-bit MAC is returned as a strict bytestring.
 --
@@ -361,7 +361,7 @@ hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
 hmac k = hmac_lazy k . BL.fromStrict
 
 -- | Produce a message authentication code for a lazy bytestring, based
---   on the provided key, via SHA-256.
+--   on the provided (strict, bytestring) key, via SHA-256.
 --
 --   The 256-bit MAC is returned as a strict bytestring.
 --
