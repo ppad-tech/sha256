@@ -85,7 +85,7 @@ std dev              634.4 ns   (523.1 ns .. 868.8 ns)
 variance introduced by outliers: 68% (severely inflated)
 ```
 
-(Use `cabal bench` to run the benchmark suite.)
+Use `cabal bench` to run the benchmark suite.
 
 ## Security
 
