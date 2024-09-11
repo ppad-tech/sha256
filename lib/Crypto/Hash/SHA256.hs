@@ -20,7 +20,7 @@ module Crypto.Hash.SHA256 (
     hash
   , hash_lazy
 
-  -- * HMAC-SHA256 hash-based MAC functions
+  -- * SHA256-based MAC functions
   , hmac
   , hmac_lazy
   ) where
