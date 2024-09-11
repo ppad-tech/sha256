@@ -5,6 +5,8 @@ lazy ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104].
 
 ## Usage
 
+A sample GHCi session:
+
 ```
 > :set -XOverloadedStrings
 >
@@ -46,6 +48,53 @@ lazy ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104].
 
 Haddocks (API documentation, etc.) are hosted at
 [docs.ppad.tech/sha256][hadoc].
+
+## Performance
+
+Our aim is best-in-class performance for pure, highly-auditable Haskell code.
+
+Benchmark figures at present:
+
+```
+benchmarking ppad-sha256/SHA256 (32B input)/hash
+time                 2.684 μs   (2.658 μs .. 2.714 μs)
+                     0.999 R²   (0.999 R² .. 1.000 R²)
+mean                 2.689 μs   (2.674 μs .. 2.706 μs)
+std dev              55.18 ns   (44.66 ns .. 66.35 ns)
+variance introduced by outliers: 22% (moderately inflated)
+
+benchmarking ppad-sha256/SHA256 (32B input)/hash_lazy
+time                 2.746 μs   (2.712 μs .. 2.786 μs)
+                     0.999 R²   (0.998 R² .. 1.000 R²)
+mean                 2.747 μs   (2.720 μs .. 2.784 μs)
+std dev              101.1 ns   (73.17 ns .. 144.1 ns)
+variance introduced by outliers: 49% (moderately inflated)
+
+benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
+time                 10.30 μs   (10.18 μs .. 10.48 μs)
+                     0.997 R²   (0.996 R² .. 0.998 R²)
+mean                 10.68 μs   (10.48 μs .. 10.92 μs)
+std dev              720.5 ns   (603.8 ns .. 874.2 ns)
+variance introduced by outliers: 74% (severely inflated)
+
+benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac_lazy
+time                 10.58 μs   (10.36 μs .. 10.85 μs)
+                     0.996 R²   (0.991 R² .. 0.998 R²)
+mean                 10.72 μs   (10.56 μs .. 10.93 μs)
+std dev              634.4 ns   (523.1 ns .. 868.8 ns)
+variance introduced by outliers: 68% (severely inflated)
+```
+
+(Use `cabal bench` to run the benchmark suite.)
+
+## Security
+
+This library aims at the maximum security achievable in a
+garbage-collected language under an optimizing compiler such as GHC, in
+which strict constant-timeness can be challenging to achieve.
+
+If you discover any vulnerabilities, please disclose them via
+security@ppad.tech.
 
 ## Development
 
