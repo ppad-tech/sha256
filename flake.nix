@@ -16,7 +16,8 @@
 
         hpkgs = pkgs.haskell.packages.ghc981.override {
           overrides = new: old: {
-            ${lib} = old.callCabal2nix lib ./. {};
+            ${lib} =
+              old.callCabal2nixWithOptions lib ./. "--enable-profiling" {};
           };
         };
 
