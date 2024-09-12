@@ -316,16 +316,19 @@ hash_alg rs = block_hash rs . prepare_schedule . parse
 
 -- register concatenation
 cat :: Registers -> BS.ByteString
-cat Registers {..} = BL.toStrict . BSB.toLazyByteString $ mconcat [
-    BSB.word32BE h0
-  , BSB.word32BE h1
-  , BSB.word32BE h2
-  , BSB.word32BE h3
-  , BSB.word32BE h4
-  , BSB.word32BE h5
-  , BSB.word32BE h6
-  , BSB.word32BE h7
-  ]
+cat Registers {..} =
+    BL.toStrict
+  . BE.toLazyByteStringWith (BE.safeStrategy 128 BE.smallChunkSize) mempty
+  $ mconcat [
+        BSB.word32BE h0
+      , BSB.word32BE h1
+      , BSB.word32BE h2
+      , BSB.word32BE h3
+      , BSB.word32BE h4
+      , BSB.word32BE h5
+      , BSB.word32BE h6
+      , BSB.word32BE h7
+      ]
 
 -- | Compute a condensed representation of a strict bytestring via
 --   SHA-256.
