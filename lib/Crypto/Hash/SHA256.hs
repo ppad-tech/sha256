@@ -29,6 +29,7 @@ import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
+import qualified Data.ByteString.Builder.Extra as BE
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.List as L
@@ -63,8 +64,20 @@ word32be s =
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
 
+-- k such that (l + 1 + k) mod 64 = 56
+sol :: Word64 -> Word64
+sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
+        in  fi (if r < 0 then r + 64 else r)
+
 pad :: BS.ByteString -> BS.ByteString
-pad = BL.toStrict . pad_lazy . BL.fromStrict
+pad m = BL.toStrict . BSB.toLazyByteString $ padded where
+  l = fi (BS.length m)
+
+  padded = BSB.byteString m <> fill (sol l) (BSB.word8 0x80)
+
+  fill j acc
+    | j == 0 = acc <> BSB.word64BE (l * 8)
+    | otherwise = fill (pred j) (acc <> BSB.word8 0x00)
 
 -- hat tip to hackage SHA authors for traversal strategy
 pad_lazy :: BL.ByteString -> BL.ByteString
@@ -74,17 +87,12 @@ pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
     (c:cs) -> c : walk (l + fi (BS.length c)) cs
     [] -> padding l (sol l) (BSB.word8 0x80)
 
-  -- k such that (l + 1 + k) mod 64 = 56
-  sol :: Word64 -> Word64
-  sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
-          in  fi (if r < 0 then r + 64 else r)
-
   -- construct padding
   padding l k bs
     | k == 0 =
           pure
         . BL.toStrict
-        . BSB.toLazyByteString
+        . BE.toLazyByteStringWith (BE.safeStrategy 128 BE.smallChunkSize) mempty
         $ bs <> BSB.word64BE (l * 8)
     | otherwise =
         let nacc = bs <> BSB.word8 0x00
