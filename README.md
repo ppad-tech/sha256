@@ -51,7 +51,8 @@ Haddocks (API documentation, etc.) are hosted at
 
 ## Performance
 
-Our aim is best-in-class performance for pure, highly-auditable Haskell code.
+The eventual aim is best-in-class performance for pure, highly-auditable
+Haskell code.
 
 Benchmark figures at present:
 
