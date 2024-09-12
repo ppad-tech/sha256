@@ -141,7 +141,7 @@ to get a REPL for the main library.
 
 ## Attribution
 
-This implementation has benefited from the [SHA][hacka] package
+This implementation has benefitted from the [SHA][hacka] package
 available on Hackage, which was used as a reference during development.
 
 [nixos]: https://nixos.org/
