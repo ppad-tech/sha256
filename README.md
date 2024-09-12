@@ -52,7 +52,7 @@ Haddocks (API documentation, etc.) are hosted at
 ## Performance
 
 The eventual aim is best-in-class performance for pure, highly-auditable
-Haskell code. At present we're not quite there.
+Haskell code. But let's keep it as an eventual goal.
 
 Current benchmark figures look like (use `cabal bench` to run the
 benchmark suite):
@@ -101,10 +101,17 @@ following:
   hash                                  1.3    8.0
 ```
 
-As low-hanging fruit, time and allocation can likely be reduced by
-unpacking the strict bytestrings used to represent 512-bit blocks, and
-also by replacing several internal data structures with unboxed tuples,
-extended literals, etc.
+The overwhelming majority of time is spent in `block_hash`, i.e. steps
+2, 3 and 4 of RFC 6234's section 6.2, which is a good target for
+optimisation. Much of the allocation done by e.g. `block_hash` and
+`prepare_schedule` can be eliminated entirely via the use of unlifted
+types and unboxed tuples (the internal `Schedule` type, for example,
+is a record type of sixty-four Word32's, which could be replaced by
+an unboxed 64-tuple, the maximum tuple size supported by GHC); the
+remainder mostly comes from allocating strict 512-bit bytestring chunks
+in `blocks_lazy`. This can also likely be improved by better bytestring
+conversion; the use of `Data.ByteString.Short` might also be worth
+exploring.
 
 ## Security
 
