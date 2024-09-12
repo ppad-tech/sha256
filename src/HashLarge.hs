@@ -20,12 +20,12 @@ main = do
 
 hash :: IO ()
 hash = do
-  input <- BL.readFile "ppad-sha256-hash-large.dat"
-  let digest = B16.encode $ SHA256.u_hash_lazy input
+  input <- BL.readFile "ppad-sha256-large.dat"
+  let digest = B16.encode $ SHA256.hash_lazy input
   print digest
 
 make :: IO ()
-make = BL.writeFile "ppad-sha256-hash-large.dat" big_input where
+make = BL.writeFile "ppad-sha256-large.dat" big_input where
   big_input :: BL.ByteString
   big_input = go (16777216 :: Int) mempty where
     go j acc

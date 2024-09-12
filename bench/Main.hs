@@ -18,7 +18,6 @@ suite = env setup $ \ ~(bs, bl) ->
       bgroup "SHA256 (32B input)" [
         bench "hash" $ whnf SHA256.hash bs
       , bench "hash_lazy" $ whnf SHA256.hash_lazy bl
-      , bench "u_hash_lazy" $ whnf SHA256.u_hash_lazy bl
       ]
     , bgroup "HMAC-SHA256 (32B input)" [
         bench "hmac" $ whnf (SHA256.hmac "key") bs
