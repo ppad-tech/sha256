@@ -103,15 +103,24 @@ following:
 
 The overwhelming majority of time is spent in `block_hash`, i.e. steps
 2, 3 and 4 of RFC 6234's section 6.2, which is a good target for
-optimisation. Much of the allocation done by e.g. `block_hash` and
-`prepare_schedule` can be eliminated entirely via the use of unlifted
-types and unboxed tuples (the internal `Schedule` type, for example,
-is a record type of sixty-four Word32's, which could be replaced by
-an unboxed 64-tuple, the maximum tuple size supported by GHC); the
-remainder mostly comes from allocating strict 512-bit bytestring chunks
-in `blocks_lazy`. This can also likely be improved by better bytestring
-conversion; the use of `Data.ByteString.Short` might also be worth
-exploring.
+optimisation.
+
+Almost all allocation can be eliminated via the use of 1) better
+bytestring management, and 2) unlifted types & unboxed tuples (the
+internal `Schedule` type, for example, is a record type of sixty-four
+Word32's, which can be replaced by an unboxed 64-tuple, the maximum
+tuple size supported by GHC).
+
+More care with bytestrings reduces the majority. The use of
+Data.ByteString.Lazy.splitAt is very problematic, as it is neither
+O(1) in time nor space as is its strict cousin. The use of a custom
+splitAt function that returns a (StrictByteString, LazyByteString) pair
+decreases allocation substantially, as do similar strategies (e.g.
+careful use of a custom Data.ByteString.splitAt that returns a strict,
+unboxed pair).
+
+None of these optimisations actually improves wall-clock performance, so
+they are left unimplemented for the time being.
 
 ## Security
 
