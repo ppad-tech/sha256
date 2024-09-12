@@ -66,29 +66,29 @@ word32be s =
 pad :: BS.ByteString -> BS.ByteString
 pad = BL.toStrict . pad_lazy . BL.fromStrict
 
+-- hat tip to hackage SHA authors for traversal strategy
 pad_lazy :: BL.ByteString -> BL.ByteString
-pad_lazy (BL.toChunks -> m) = con 0 mempty m where
-  con !l acc = \case
-    (c:cs) ->
-      let nl = l + fi (BS.length c)
-          nacc = acc <> BSB.byteString c
-      in  con nl nacc cs
-
-    [] ->
-      let k = sol l
-          don = fin l k (acc <> BSB.word8 0x80)
-      in  BSB.toLazyByteString don
+pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
+  -- walk chunks, calculating length and appending padding
+  walk !l = \case
+    (c:cs) -> c : walk (l + fi (BS.length c)) cs
+    [] -> padding l (sol l) (BSB.word8 0x80)
 
   -- k such that (l + 1 + k) mod 64 = 56
   sol :: Word64 -> Word64
   sol l = let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
           in  fi (if r < 0 then r + 64 else r)
 
-  fin l k acc
-    | k == 0 = acc <> BSB.word64BE (l * 8)
+  -- construct padding
+  padding l k bs
+    | k == 0 =
+          pure
+        . BL.toStrict
+        . BSB.toLazyByteString
+        $ bs <> BSB.word64BE (l * 8)
     | otherwise =
-        let nacc = acc <> BSB.word8 0x00
-        in  fin l (pred k) nacc
+        let nacc = bs <> BSB.word8 0x00
+        in  padding l (pred k) nacc
 
 -- functions and constants used
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-5.1
