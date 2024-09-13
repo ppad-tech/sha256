@@ -6,6 +6,7 @@ import Criterion.Main
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Digest.Pure.SHA as SHA
 
 main :: IO ()
 main = defaultMain [
@@ -18,7 +19,7 @@ suite = env setup $ \ ~(bs, bl) ->
       bgroup "SHA256 (32B input)" [
         bench "hash" $ whnf SHA256.hash bs
       , bench "hash_lazy" $ whnf SHA256.hash_lazy bl
-      , bench "u_hash_lazy" $ whnf SHA256.u_hash_lazy bl
+      , bench "SHA.sha256" $ whnf SHA.sha256 bl
       ]
     , bgroup "HMAC-SHA256 (32B input)" [
         bench "hmac" $ whnf (SHA256.hmac "key") bs

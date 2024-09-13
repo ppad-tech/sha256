@@ -134,13 +134,6 @@ unit_tests = testGroup "ppad-sha256" [
     , cmp_hash_lazy "hv3" hv3_put hv3_pec
     , cmp_hash_lazy "hv4" hv4_put hv4_pec
     ]
-  , testGroup "u_hash_lazy" [
-      cmp_u_hash_lazy "hv0" hv0_put hv0_pec
-    , cmp_u_hash_lazy "hv1" hv1_put hv1_pec
-    , cmp_u_hash_lazy "hv2" hv2_put hv2_pec
-    , cmp_u_hash_lazy "hv3" hv3_put hv3_pec
-    , cmp_u_hash_lazy "hv4" hv4_put hv4_pec
-    ]
   -- uncomment me to run (slow, ~40s)
   --
   -- , testGroup "hash_lazy (1GB input)" [
@@ -195,11 +188,6 @@ cmp_hash msg put pec = testCase msg $ do
 cmp_hash_lazy :: String -> BS.ByteString -> BS.ByteString -> TestTree
 cmp_hash_lazy msg (BL.fromStrict -> put) pec = testCase msg $ do
   let out = B16.encode (SHA256.hash_lazy put)
-  assertEqual mempty pec out
-
-cmp_u_hash_lazy :: String -> BS.ByteString -> BS.ByteString -> TestTree
-cmp_u_hash_lazy msg (BL.fromStrict -> put) pec = testCase msg $ do
-  let out = B16.encode (SHA256.u_hash_lazy put)
   assertEqual mempty pec out
 
 cmp_hmac

@@ -53,13 +53,14 @@ benchmark sha256-bench
   main-is:             Main.hs
 
   ghc-options:
-    -rtsopts -O2 -Wall -fno-warn-orphans
+    -rtsopts -O2 -Wall
 
   build-depends:
       base
     , bytestring
     , criterion
     , ppad-sha256
+    , SHA
 
 executable hash-large
   main-is:           HashLarge.hs
