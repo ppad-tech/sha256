@@ -119,7 +119,7 @@ decreases allocation substantially, as do similar strategies (e.g.
 careful use of a custom Data.ByteString.splitAt that returns a strict,
 unboxed pair).
 
-None of these optimisations actually improves wall-clock performance, so
+None of these optimisations actually improve wall-clock performance, so
 they are left unimplemented for the time being.
 
 ## Security
