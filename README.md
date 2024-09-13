@@ -51,76 +51,112 @@ Haddocks (API documentation, etc.) are hosted at
 
 ## Performance
 
-The eventual aim is best-in-class performance for pure, highly-auditable
-Haskell code. But let's keep it as an eventual goal.
+The aim is best-in-class performance for pure, highly-auditable Haskell
+code.
 
 Current benchmark figures look like (use `cabal bench` to run the
 benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
-  time                 2.684 μs   (2.658 μs .. 2.714 μs)
-                       0.999 R²   (0.999 R² .. 1.000 R²)
-  mean                 2.689 μs   (2.674 μs .. 2.706 μs)
-  std dev              55.18 ns   (44.66 ns .. 66.35 ns)
-  variance introduced by outliers: 22% (moderately inflated)
+  time                 1.898 μs   (1.858 μs .. 1.941 μs)
+                       0.997 R²   (0.996 R² .. 0.999 R²)
+  mean                 1.874 μs   (1.856 μs .. 1.902 μs)
+  std dev              75.90 ns   (60.30 ns .. 101.8 ns)
+  variance introduced by outliers: 55% (severely inflated)
 
   benchmarking ppad-sha256/SHA256 (32B input)/hash_lazy
-  time                 2.746 μs   (2.712 μs .. 2.786 μs)
-                       0.999 R²   (0.998 R² .. 1.000 R²)
-  mean                 2.747 μs   (2.720 μs .. 2.784 μs)
-  std dev              101.1 ns   (73.17 ns .. 144.1 ns)
-  variance introduced by outliers: 49% (moderately inflated)
+  time                 1.930 μs   (1.891 μs .. 1.967 μs)
+                       0.998 R²   (0.997 R² .. 0.999 R²)
+  mean                 1.912 μs   (1.885 μs .. 1.947 μs)
+  std dev              104.6 ns   (77.34 ns .. 162.6 ns)
+  variance introduced by outliers: 69% (severely inflated)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
-  time                 10.30 μs   (10.18 μs .. 10.48 μs)
-                       0.997 R²   (0.996 R² .. 0.998 R²)
-  mean                 10.68 μs   (10.48 μs .. 10.92 μs)
-  std dev              720.5 ns   (603.8 ns .. 874.2 ns)
-  variance introduced by outliers: 74% (severely inflated)
+  time                 7.287 μs   (7.128 μs .. 7.424 μs)
+                       0.996 R²   (0.995 R² .. 0.998 R²)
+  mean                 7.272 μs   (7.115 μs .. 7.455 μs)
+  std dev              565.2 ns   (490.9 ns .. 689.7 ns)
+  variance introduced by outliers: 80% (severely inflated)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac_lazy
-  time                 10.58 μs   (10.36 μs .. 10.85 μs)
-                       0.996 R²   (0.991 R² .. 0.998 R²)
-  mean                 10.72 μs   (10.56 μs .. 10.93 μs)
-  std dev              634.4 ns   (523.1 ns .. 868.8 ns)
-  variance introduced by outliers: 68% (severely inflated)
+  time                 7.231 μs   (7.102 μs .. 7.393 μs)
+                       0.996 R²   (0.994 R² .. 0.998 R²)
+  mean                 7.436 μs   (7.290 μs .. 7.621 μs)
+  std dev              559.2 ns   (446.3 ns .. 732.7 ns)
+  variance introduced by outliers: 78% (severely inflated)
 ```
 
-When testing `hash_lazy` on a 1GB input, we get a profile like the
+Compare this to Hackage's famous SHA package:
+
+```
+  benchmarking ppad-sha256/SHA256 (32B input)/SHA.sha256
+  time                 2.929 μs   (2.871 μs .. 2.995 μs)
+                       0.997 R²   (0.995 R² .. 0.998 R²)
+  mean                 2.879 μs   (2.833 μs .. 2.938 μs)
+  std dev              170.4 ns   (130.4 ns .. 258.9 ns)
+  variance introduced by outliers: 71% (severely inflated)
+
+  benchmarking ppad-sha256/HMAC-SHA256 (32B input)/SHA.hmacSha256
+  time                 11.42 μs   (11.09 μs .. 11.80 μs)
+                       0.994 R²   (0.992 R² .. 0.997 R²)
+  mean                 11.36 μs   (11.09 μs .. 11.61 μs)
+  std dev              903.5 ns   (766.5 ns .. 1.057 μs)
+  variance introduced by outliers: 79% (severely inflated)
+```
+
+When testing `hash_lazy` on a 1GB input, we get statistics like the
 following:
 
 ```
-  COST CENTRE                         %time %alloc
+   2,310,899,616 bytes allocated in the heap
+          93,800 bytes copied during GC
+          78,912 bytes maximum residency (2 sample(s))
+          35,776 bytes maximum slop
+              10 MiB total memory in use (0 MiB lost due to fragmentation)
 
-  Crypto.Hash.SHA256.block_hash        72.8    4.9
-  Crypto.Hash.SHA256.prepare_schedule  15.9   32.3
-  Crypto.Hash.SHA256.blocks_lazy        3.7   37.2
-  Crypto.Hash.SHA256.parse              3.6   14.7
-  Crypto.Hash.SHA256.hash_alg           2.1    2.9
-  hash                                  1.3    8.0
+                                     Tot time (elapsed)  Avg pause  Max pause
+  Gen  0       295 colls,     0 par    0.007s   0.008s     0.0000s    0.0001s
+  Gen  1         2 colls,     0 par    0.000s   0.001s     0.0004s    0.0004s
+
+  INIT    time    0.003s  (  0.003s elapsed)
+  MUT     time   22.205s  ( 22.260s elapsed)
+  GC      time    0.007s  (  0.009s elapsed)
+  EXIT    time    0.000s  (  0.001s elapsed)
+  Total   time   22.216s  ( 22.273s elapsed)
+
+  %GC     time       0.0%  (0.0% elapsed)
+
+  Alloc rate    104,073,382 bytes per MUT second
+
+  Productivity 100.0% of total user, 99.9% of total elapsed
 ```
 
-The overwhelming majority of time is spent in `block_hash`, i.e. steps
-2, 3 and 4 of RFC 6234's section 6.2, which is a good target for
-optimisation.
+SHA.sha256 gets more like:
 
-Almost all allocation can be eliminated via the use of 1) better
-bytestring management, and 2) unlifted types & unboxed tuples (the
-internal `Schedule` type, for example, is a record type of sixty-four
-Word32's, which can be replaced by an unboxed 64-tuple, the maximum
-tuple size supported by GHC).
+```
+  74,403,596,936 bytes allocated in the heap
+      12,971,992 bytes copied during GC
+          79,176 bytes maximum residency (2 sample(s))
+          35,512 bytes maximum slop
+               6 MiB total memory in use (0 MiB lost due to fragmentation)
 
-More care with bytestrings reduces the majority. The use of
-Data.ByteString.Lazy.splitAt is very problematic, as it is neither
-O(1) in time nor space as is its strict cousin. The use of a custom
-splitAt function that returns a (StrictByteString, LazyByteString) pair
-decreases allocation substantially, as do similar strategies (e.g.
-careful use of a custom Data.ByteString.splitAt that returns a strict,
-unboxed pair).
+                                     Tot time (elapsed)  Avg pause  Max pause
+  Gen  0     17883 colls,     0 par    0.103s   0.148s     0.0000s    0.0001s
+  Gen  1         2 colls,     0 par    0.000s   0.000s     0.0002s    0.0003s
 
-None of these optimisations actually improve wall-clock performance, so
-they are left unimplemented for the time being.
+  INIT    time    0.006s  (  0.006s elapsed)
+  MUT     time   32.367s  ( 32.408s elapsed)
+  GC      time    0.104s  (  0.149s elapsed)
+  EXIT    time    0.000s  (  0.001s elapsed)
+  Total   time   32.477s  ( 32.563s elapsed)
+
+  %GC     time       0.0%  (0.0% elapsed)
+
+  Alloc rate    2,298,740,250 bytes per MUT second
+
+  Productivity  99.7% of total user, 99.5% of total elapsed
+```
 
 ## Security
 

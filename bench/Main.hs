@@ -24,6 +24,7 @@ suite = env setup $ \ ~(bs, bl) ->
     , bgroup "HMAC-SHA256 (32B input)" [
         bench "hmac" $ whnf (SHA256.hmac "key") bs
       , bench "hmac_lazy" $ whnf (SHA256.hmac_lazy "key") bl
+      , bench "SHA.hmacSha256" $ whnf (SHA.hmacSha256 "key") bl
       ]
     ]
   where

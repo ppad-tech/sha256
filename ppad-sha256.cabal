@@ -72,4 +72,5 @@ executable hash-large
     , base16-bytestring
     , bytestring
     , ppad-sha256
+    , SHA
 
