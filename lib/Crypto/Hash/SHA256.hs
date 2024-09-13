@@ -104,8 +104,17 @@ pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
 ch :: Word32 -> Word32 -> Word32 -> Word32
 ch x y z = (x .&. y) `B.xor` (B.complement x .&. z)
 
+-- credit to SHA authors for the following optimisation. their text:
+--
+-- > note:
+-- >   the original functions is (x & y) ^ (x & z) ^ (y & z)
+-- >   if you fire off truth tables, this is equivalent to
+-- >     (x & y) | (x & z) | (y & z)
+-- >   which you can the use distribution on:
+-- >     (x & (y | z)) | (y & z)
+-- >   which saves us one operation.
 maj :: Word32 -> Word32 -> Word32 -> Word32
-maj x y z = (x .&. y) `B.xor` (x .&. z) `B.xor` (y .&. z)
+maj x y z = (x .&. (y .|. z)) .|. (y .&. z)
 
 bsig0 :: Word32 -> Word32
 bsig0 x = B.rotateR x 2 `B.xor` B.rotateR x 13 `B.xor` B.rotateR x 22
