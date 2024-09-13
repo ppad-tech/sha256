@@ -407,15 +407,7 @@ step# :: Registers -> Word32# -> Word32# -> Registers
 step# (# a, b, c, d, e, f, g, h #) k w =
   let t1 = p32# h (p32# (bsig1# e) (p32# (ch# e f g) (p32# k w)))
       t2 = p32# (bsig0# a) (maj# a b c)
-      h# = g
-      g# = f
-      f# = e
-      e# = p32# d t1
-      d# = c
-      c# = b
-      b# = a
-      a# = p32# t1 t2
-  in  (# a#, b#, c#, d#, e#, f#, g#, h# #)
+  in  (# p32# t1 t2, a, b, c, p32# d t1, e, f, g #)
 
 -- RFC 6234 6.2 block pipeline
 hash_alg# :: Registers -> BS.ByteString -> Registers
