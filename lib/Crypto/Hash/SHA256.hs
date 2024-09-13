@@ -694,11 +694,19 @@ cat# (# h0, h1, h2, h3, h4, h5, h6, h7 #) =
 --   >>> hash "strict bytestring input"
 --   "<strict 256-bit message digest>"
 hash :: BS.ByteString -> BS.ByteString
-hash =
-      cat
-    . L.foldl' hash_alg iv
-    . blocks 64
-    . pad
+hash bs = cat# (go r_iv (pad bs)) where
+  r_iv = (#
+      0x6a09e667#Word32, 0xbb67ae85#Word32
+    , 0x3c6ef372#Word32, 0xa54ff53a#Word32
+    , 0x510e527f#Word32, 0x9b05688c#Word32
+    , 0x1f83d9ab#Word32, 0x5be0cd19#Word32
+    #)
+
+  go :: Rs -> BS.ByteString -> Rs
+  go !acc b
+    | BS.null b = acc
+    | otherwise = case BS.splitAt 64 b of
+        (c, r) -> go (hash_alg# acc c) r
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
