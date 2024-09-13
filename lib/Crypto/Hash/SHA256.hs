@@ -22,6 +22,7 @@ module Crypto.Hash.SHA256 (
   -- * SHA-256 message digest functions
     hash
   , hash_lazy
+  , u_hash_lazy
 
   -- * SHA256-based MAC functions
   , hmac
@@ -160,7 +161,7 @@ pad m = BL.toStrict . BSB.toLazyByteString $ padded where
 
   padded = BSB.byteString m <> fill (sol l) (BSB.word8 0x80)
 
-  fill j acc
+  fill j !acc
     | j == 0 = acc <> BSB.word64BE (l * 8)
     | otherwise = fill (pred j) (acc <> BSB.word8 0x00)
 
@@ -721,8 +722,8 @@ hash_lazy =
 --
 --   >>> hash_lazy "lazy bytestring input"
 --   "<strict 256-bit message digest>"
-hash_lazy# :: BL.ByteString -> BS.ByteString
-hash_lazy# bl = cat# (go r_iv (pad_lazy bl)) where
+u_hash_lazy :: BL.ByteString -> BS.ByteString
+u_hash_lazy bl = cat# (go r_iv (pad_lazy bl)) where
   r_iv = (#
       0x6a09e667#Word32, 0xbb67ae85#Word32
     , 0x3c6ef372#Word32, 0xa54ff53a#Word32
