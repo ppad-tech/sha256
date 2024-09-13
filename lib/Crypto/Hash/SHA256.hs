@@ -1,9 +1,7 @@
 {-# OPTIONS_GHC -funbox-small-strict-fields #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ExtendedLiterals #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -154,7 +152,7 @@ pad m = BL.toStrict . BSB.toLazyByteString $ padded where
 pad_lazy :: BL.ByteString -> BL.ByteString
 pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
   -- walk chunks, calculating length and appending padding
-  walk !l = \case
+  walk !l bs = case bs of
     (c:cs) -> c : walk (l + fi (BS.length c)) cs
     [] -> padding l (sol l) (BSB.word8 0x80)
 
