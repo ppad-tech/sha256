@@ -150,8 +150,9 @@ to get a REPL for the main library.
 
 ## Attribution
 
-This implementation has benefitted from the [SHA][hacka] package
-available on Hackage, which was used as a reference during development.
+This implementation has benefitted immensely from the [SHA][hacka]
+package available on Hackage, which was used as a reference during
+development. Many parts wound up as direct translations.
 
 [nixos]: https://nixos.org/
 [flake]: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html
