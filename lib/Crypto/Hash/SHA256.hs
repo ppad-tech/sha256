@@ -289,70 +289,38 @@ block_hash :: Registers -> Schedule -> Registers
 block_hash r00@Registers {..} Schedule {..} =
   -- constants are the first 32 bits of the fractional parts of the
   -- cube roots of the first sixty-four prime numbers
-  let r01 = step r00 0x428a2f98 w00
-      r02 = step r01 0x71374491 w01
-      r03 = step r02 0xb5c0fbcf w02
-      r04 = step r03 0xe9b5dba5 w03
-      r05 = step r04 0x3956c25b w04
-      r06 = step r05 0x59f111f1 w05
-      r07 = step r06 0x923f82a4 w06
-      r08 = step r07 0xab1c5ed5 w07
-      r09 = step r08 0xd807aa98 w08
-      r10 = step r09 0x12835b01 w09
-      r11 = step r10 0x243185be w10
-      r12 = step r11 0x550c7dc3 w11
-      r13 = step r12 0x72be5d74 w12
-      r14 = step r13 0x80deb1fe w13
-      r15 = step r14 0x9bdc06a7 w14
-      r16 = step r15 0xc19bf174 w15
-      r17 = step r16 0xe49b69c1 w16
-      r18 = step r17 0xefbe4786 w17
-      r19 = step r18 0x0fc19dc6 w18
-      r20 = step r19 0x240ca1cc w19
-      r21 = step r20 0x2de92c6f w20
-      r22 = step r21 0x4a7484aa w21
-      r23 = step r22 0x5cb0a9dc w22
-      r24 = step r23 0x76f988da w23
-      r25 = step r24 0x983e5152 w24
-      r26 = step r25 0xa831c66d w25
-      r27 = step r26 0xb00327c8 w26
-      r28 = step r27 0xbf597fc7 w27
-      r29 = step r28 0xc6e00bf3 w28
-      r30 = step r29 0xd5a79147 w29
-      r31 = step r30 0x06ca6351 w30
-      r32 = step r31 0x14292967 w31
-      r33 = step r32 0x27b70a85 w32
-      r34 = step r33 0x2e1b2138 w33
-      r35 = step r34 0x4d2c6dfc w34
-      r36 = step r35 0x53380d13 w35
-      r37 = step r36 0x650a7354 w36
-      r38 = step r37 0x766a0abb w37
-      r39 = step r38 0x81c2c92e w38
-      r40 = step r39 0x92722c85 w39
-      r41 = step r40 0xa2bfe8a1 w40
-      r42 = step r41 0xa81a664b w41
-      r43 = step r42 0xc24b8b70 w42
-      r44 = step r43 0xc76c51a3 w43
-      r45 = step r44 0xd192e819 w44
-      r46 = step r45 0xd6990624 w45
-      r47 = step r46 0xf40e3585 w46
-      r48 = step r47 0x106aa070 w47
-      r49 = step r48 0x19a4c116 w48
-      r50 = step r49 0x1e376c08 w49
-      r51 = step r50 0x2748774c w50
-      r52 = step r51 0x34b0bcb5 w51
-      r53 = step r52 0x391c0cb3 w52
-      r54 = step r53 0x4ed8aa4a w53
-      r55 = step r54 0x5b9cca4f w54
-      r56 = step r55 0x682e6ff3 w55
-      r57 = step r56 0x748f82ee w56
-      r58 = step r57 0x78a5636f w57
-      r59 = step r58 0x84c87814 w58
-      r60 = step r59 0x8cc70208 w59
-      r61 = step r60 0x90befffa w60
-      r62 = step r61 0xa4506ceb w61
-      r63 = step r62 0xbef9a3f7 w62
-      r64 = step r63 0xc67178f2 w63
+  let r01 = step r00 0x428a2f98 w00; r02 = step r01 0x71374491 w01
+      r03 = step r02 0xb5c0fbcf w02; r04 = step r03 0xe9b5dba5 w03
+      r05 = step r04 0x3956c25b w04; r06 = step r05 0x59f111f1 w05
+      r07 = step r06 0x923f82a4 w06; r08 = step r07 0xab1c5ed5 w07
+      r09 = step r08 0xd807aa98 w08; r10 = step r09 0x12835b01 w09
+      r11 = step r10 0x243185be w10; r12 = step r11 0x550c7dc3 w11
+      r13 = step r12 0x72be5d74 w12; r14 = step r13 0x80deb1fe w13
+      r15 = step r14 0x9bdc06a7 w14; r16 = step r15 0xc19bf174 w15
+      r17 = step r16 0xe49b69c1 w16; r18 = step r17 0xefbe4786 w17
+      r19 = step r18 0x0fc19dc6 w18; r20 = step r19 0x240ca1cc w19
+      r21 = step r20 0x2de92c6f w20; r22 = step r21 0x4a7484aa w21
+      r23 = step r22 0x5cb0a9dc w22; r24 = step r23 0x76f988da w23
+      r25 = step r24 0x983e5152 w24; r26 = step r25 0xa831c66d w25
+      r27 = step r26 0xb00327c8 w26; r28 = step r27 0xbf597fc7 w27
+      r29 = step r28 0xc6e00bf3 w28; r30 = step r29 0xd5a79147 w29
+      r31 = step r30 0x06ca6351 w30; r32 = step r31 0x14292967 w31
+      r33 = step r32 0x27b70a85 w32; r34 = step r33 0x2e1b2138 w33
+      r35 = step r34 0x4d2c6dfc w34; r36 = step r35 0x53380d13 w35
+      r37 = step r36 0x650a7354 w36; r38 = step r37 0x766a0abb w37
+      r39 = step r38 0x81c2c92e w38; r40 = step r39 0x92722c85 w39
+      r41 = step r40 0xa2bfe8a1 w40; r42 = step r41 0xa81a664b w41
+      r43 = step r42 0xc24b8b70 w42; r44 = step r43 0xc76c51a3 w43
+      r45 = step r44 0xd192e819 w44; r46 = step r45 0xd6990624 w45
+      r47 = step r46 0xf40e3585 w46; r48 = step r47 0x106aa070 w47
+      r49 = step r48 0x19a4c116 w48; r50 = step r49 0x1e376c08 w49
+      r51 = step r50 0x2748774c w50; r52 = step r51 0x34b0bcb5 w51
+      r53 = step r52 0x391c0cb3 w52; r54 = step r53 0x4ed8aa4a w53
+      r55 = step r54 0x5b9cca4f w54; r56 = step r55 0x682e6ff3 w55
+      r57 = step r56 0x748f82ee w56; r58 = step r57 0x78a5636f w57
+      r59 = step r58 0x84c87814 w58; r60 = step r59 0x8cc70208 w59
+      r61 = step r60 0x90befffa w60; r62 = step r61 0xa4506ceb w61
+      r63 = step r62 0xbef9a3f7 w62; r64 = step r63 0xc67178f2 w63
       !(Registers a b c d e f g h) = r64
   in  Registers
         (a + h0) (b + h1) (c + h2) (d + h3)
