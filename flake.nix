@@ -28,7 +28,7 @@
         {
           packages.${lib} = hpkgs.${lib};
 
-          defaultPackage = self.packages.${system}.${lib};
+          packages.default = self.packages.${system}.${lib};
 
           devShells.default = hpkgs.shellFor {
             packages = p: [
