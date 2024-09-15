@@ -134,7 +134,7 @@ unit_tests = testGroup "ppad-sha256" [
     , cmp_hash_lazy "hv3" hv3_put hv3_pec
     , cmp_hash_lazy "hv4" hv4_put hv4_pec
     ]
-  -- uncomment me to run (slow, ~40s)
+  -- uncomment me to run (slow, ~30s)
   --
   -- , testGroup "hash_lazy (1GB input)" [
   --     testCase "hv5" $ do
