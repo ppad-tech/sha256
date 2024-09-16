@@ -23,9 +23,7 @@
         cabal = hpkgs.cabal-install;
       in
         {
-          packages.${lib} = hpkgs.${lib};
-
-          packages.default = self.packages.${system}.${lib};
+          packages.default = hpkgs.${lib};
 
           devShells.default = hpkgs.shellFor {
             packages = p: [
