@@ -14,12 +14,9 @@
         pkgs = import nixpkgs { inherit system; };
         hlib = pkgs.haskell.lib;
 
-        hpkgs = pkgs.haskell.packages.ghc981.override {
-          overrides = new: old: {
-            ${lib} =
-              old.callCabal2nixWithOptions lib ./. "--enable-profiling" {};
-          };
-        };
+        hpkgs = pkgs.haskell.packages.ghc981.extend (new: old: {
+          ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {};
+        });
 
         cc    = pkgs.stdenv.cc;
         ghc   = hpkgs.ghc;
