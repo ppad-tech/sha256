@@ -1,5 +1,5 @@
 {
-  description = "ppad-sha256";
+  description = "Pure Haskell SHA-256 and HMAC-SHA256";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
