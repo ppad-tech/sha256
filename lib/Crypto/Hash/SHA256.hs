@@ -58,9 +58,21 @@ unsafe_word32be s =
 
 -- utility types for more efficient ByteString management
 
+data SSPair = SSPair
+  {-# UNPACK #-} !BS.ByteString
+  {-# UNPACK #-} !BS.ByteString
+
 data SLPair = SLPair {-# UNPACK #-} !BS.ByteString !BL.ByteString
 
 data WSPair = WSPair {-# UNPACK #-} !Word32 {-# UNPACK #-} !BS.ByteString
+
+-- unsafe version of splitAt that does no bounds checking
+--
+-- invariant:
+--   0 <= n <= l
+unsafe_splitAt :: Int -> BS.ByteString -> SSPair
+unsafe_splitAt n (BI.BS x l) =
+  SSPair (BI.BS x n) (BI.BS (plusForeignPtr x n) (l - n))
 
 -- variant of Data.ByteString.Lazy.splitAt that returns the initial
 -- component as a strict, unboxed ByteString
@@ -68,10 +80,13 @@ splitAt64 :: BL.ByteString -> SLPair
 splitAt64 = splitAt' (64 :: Int) where
   splitAt' _ BLI.Empty        = SLPair mempty BLI.Empty
   splitAt' n (BLI.Chunk c cs) =
-    if   n < fi (BS.length c)
-    then SLPair (BS.take (fi n) c) (BLI.Chunk (BS.drop (fi n) c) cs)
+    if    n < BS.length c
+    then
+      -- n < BS.length c, so unsafe_splitAt is safe
+      let !(SSPair c0 c1) = unsafe_splitAt n c
+      in  SLPair c0 (BLI.Chunk c1 cs)
     else
-      let SLPair cs' cs'' = splitAt' (n - fi (BS.length c)) cs
+      let SLPair cs' cs'' = splitAt' (n - BS.length c) cs
       in  SLPair (c <> cs') cs''
 
 -- variant of Data.ByteString.splitAt that behaves like an incremental
@@ -369,7 +384,7 @@ hash bs = cat (go iv (pad bs)) where
     | BS.null b = acc
     -- if n > 0, then
     --
-    -- let (c, r) = BS.splitAt 64 b
+    -- let (c, r) = unsafe_splitAt 64 b
     -- then length(c) == 512 bits                                   by (1)
     --      length(r) == m * 512 bits for some m >= 0               by (1)
     --
@@ -383,8 +398,8 @@ hash bs = cat (go iv (pad bs)) where
     --   => next invocation of 'go' terminates safely               by (2), (4)
     --
     -- then by induction, 'go' always terminates safely (QED)
-    | otherwise = case BS.splitAt 64 b of
-        (c, r) -> go (unsafe_hash_alg acc c) r
+    | otherwise = case unsafe_splitAt 64 b of
+        SSPair c r -> go (unsafe_hash_alg acc c) r
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
