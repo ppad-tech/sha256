@@ -54,8 +54,8 @@ Haddocks (API documentation, etc.) are hosted at
 The aim is best-in-class performance for pure, highly-auditable Haskell
 code.
 
-Current benchmark figures look like (use `cabal bench` to run the
-benchmark suite):
+Current benchmark figures on my mid-2020 MacBook Air look like (use
+`cabal bench` to run the benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
