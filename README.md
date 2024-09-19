@@ -105,8 +105,16 @@ Compare this to Hackage's famous SHA package:
   variance introduced by outliers: 79% (severely inflated)
 ```
 
-When testing `hash_lazy` on a 1GB input, we get statistics like the
-following:
+Or the relevant SHA-256-based functions from a library with similar
+aims, [noble-hashes][noble]:
+
+```
+SHA256 32B x 420,875 ops/sec @ 2μs/op ± 1.33% (min: 1μs, max: 3ms)
+HMAC-SHA256 32B x 97,304 ops/sec @ 10μs/op
+```
+
+When reading a 1GB input from disk and testing it with `hash_lazy`, we
+get statistics like the following:
 
 ```
    2,310,899,616 bytes allocated in the heap
@@ -196,3 +204,4 @@ development. Many parts wound up as direct translations.
 [hacka]: https://hackage.haskell.org/package/SHA
 [r6234]: https://datatracker.ietf.org/doc/html/rfc6234
 [r2104]: https://datatracker.ietf.org/doc/html/rfc2104
+[noble]: https://github.com/paulmillr/noble-hashes
