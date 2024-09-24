@@ -33,7 +33,7 @@ A sample GHCi session:
   > BS.take 10 hmac_l
   "\DELSOk\180\242\182'v\187"
   >
-  > -- you can use third-party libraries for rendering if necessary
+  > -- you can use third-party libraries for rendering if needed
   > -- e.g., using base16-bytestring:
   >
   > import qualified Data.ByteString.Base16 as B16
@@ -196,7 +196,7 @@ to get a REPL for the main library.
 
 This implementation has benefitted immensely from the [SHA][hacka]
 package available on Hackage, which was used as a reference during
-development. Many parts wound up as direct translations.
+development. Many parts wound up being direct translations.
 
 [nixos]: https://nixos.org/
 [flake]: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html
