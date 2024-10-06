@@ -450,7 +450,10 @@ data KeyAndLen = KeyAndLen
 --
 --   >>> hmac_lazy "strict bytestring key" "lazy bytestring input"
 --   "<strict 256-bit MAC>"
-hmac_lazy :: BS.ByteString -> BL.ByteString -> BS.ByteString
+hmac_lazy
+  :: BS.ByteString -- ^ key
+  -> BL.ByteString -- ^ text
+  -> BS.ByteString
 hmac_lazy mk text =
     let step1 = k <> BS.replicate (64 - lk) 0x00
         step2 = BS.map (B.xor 0x36) step1
