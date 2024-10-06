@@ -50,10 +50,10 @@ fi = fromIntegral
 --   the input bytestring is at least 32 bits in length
 unsafe_word32be :: BS.ByteString -> Word32
 unsafe_word32be s =
-  (fromIntegral (s `BU.unsafeIndex` 0) `B.unsafeShiftL` 24) .|.
-  (fromIntegral (s `BU.unsafeIndex` 1) `B.unsafeShiftL` 16) .|.
-  (fromIntegral (s `BU.unsafeIndex` 2) `B.unsafeShiftL`  8) .|.
-  (fromIntegral (s `BU.unsafeIndex` 3))
+  (fi (s `BU.unsafeIndex` 0) `B.unsafeShiftL` 24) .|.
+  (fi (s `BU.unsafeIndex` 1) `B.unsafeShiftL` 16) .|.
+  (fi (s `BU.unsafeIndex` 2) `B.unsafeShiftL`  8) .|.
+  (fi (s `BU.unsafeIndex` 3))
 {-# INLINE unsafe_word32be #-}
 
 -- utility types for more efficient ByteString management
@@ -417,7 +417,7 @@ hash_lazy bl = cat (go iv (pad_lazy bl)) where
     | otherwise = case splitAt64 bs of
         SLPair c r -> go (unsafe_hash_alg acc c) r
 
--- HMAC
+-- HMAC -----------------------------------------------------------------------
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
 
 -- | Produce a message authentication code for a strict bytestring,
@@ -425,29 +425,44 @@ hash_lazy bl = cat (go iv (pad_lazy bl)) where
 --
 --   The 256-bit MAC is returned as a strict bytestring.
 --
+--   Per RFC 2104, the key /should/ be a minimum of 32 bytes long. Keys
+--   exceeding 64 bytes in length will first be hashed (via SHA-256).
+--
 --   >>> hmac "strict bytestring key" "strict bytestring input"
 --   "<strict 256-bit MAC>"
-hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
+hmac
+  :: BS.ByteString -- ^ key
+  -> BS.ByteString -- ^ text
+  -> BS.ByteString
 hmac k = hmac_lazy k . BL.fromStrict
+
+data KeyAndLen = KeyAndLen
+  {-# UNPACK #-} !BS.ByteString
+  {-# UNPACK #-} !Int
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided (strict, bytestring) key, via SHA-256.
 --
 --   The 256-bit MAC is returned as a strict bytestring.
 --
+--   Per RFC 2104, the key /should/ be a minimum of 32 bytes long. Keys
+--   exceeding 64 bytes in length will first be hashed (via SHA-256).
+--
 --   >>> hmac_lazy "strict bytestring key" "lazy bytestring input"
 --   "<strict 256-bit MAC>"
 hmac_lazy :: BS.ByteString -> BL.ByteString -> BS.ByteString
-hmac_lazy k text
-    | lk > 64 = error "ppad-sha256: hmac key exceeds 64 bytes"
-    | otherwise =
-        let step1 = k <> BS.replicate (64 - lk) 0x00
-            step2 = BS.map (B.xor 0x36) step1
-            step3 = BL.fromStrict step2 <> text
-            step4 = hash_lazy step3
-            step5 = BS.map (B.xor 0x5C) step1
-            step6 = step5 <> step4
-        in  hash step6
+hmac_lazy mk text =
+    let step1 = k <> BS.replicate (64 - lk) 0x00
+        step2 = BS.map (B.xor 0x36) step1
+        step3 = BL.fromStrict step2 <> text
+        step4 = hash_lazy step3
+        step5 = BS.map (B.xor 0x5C) step1
+        step6 = step5 <> step4
+    in  hash step6
   where
-    lk = fi (BS.length k)
+    !(KeyAndLen k lk) =
+      let l = BS.length mk
+      in  if   l > 64
+          then KeyAndLen (hash mk) 32
+          else KeyAndLen mk l
 
