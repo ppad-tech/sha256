@@ -150,12 +150,10 @@ unit_tests = testGroup "ppad-sha256" [
         let out = BS.take 32 $ B16.encode (SHA256.hmac hmv5_key hmv5_put)
         assertEqual mempty hmv5_pec out
     , testCase "hmv6" $ do
-        let keh = SHA256.hash hmv6_key
-            out = B16.encode (SHA256.hmac keh hmv6_put)
+        let out = B16.encode (SHA256.hmac hmv6_key hmv6_put)
         assertEqual mempty hmv6_pec out
     , testCase "hmv7" $ do
-        let keh = SHA256.hash hmv7_key
-            out = B16.encode (SHA256.hmac keh hmv7_put)
+        let out = B16.encode (SHA256.hmac hmv7_key hmv7_put)
         assertEqual mempty hmv7_pec out
     ]
   , testGroup "hmac_lazy" [
@@ -168,14 +166,12 @@ unit_tests = testGroup "ppad-sha256" [
             out = BS.take 32 $ B16.encode (SHA256.hmac_lazy hmv5_key lut)
         assertEqual mempty hmv5_pec out
     , testCase "hmv6" $ do
-        let keh = SHA256.hash hmv6_key
-            lut = BL.fromStrict hmv6_put
-            out = B16.encode (SHA256.hmac_lazy keh lut)
+        let lut = BL.fromStrict hmv6_put
+            out = B16.encode (SHA256.hmac_lazy hmv6_key lut)
         assertEqual mempty hmv6_pec out
     , testCase "hmv7" $ do
-        let keh = SHA256.hash hmv7_key
-            lut = BL.fromStrict hmv7_put
-            out = B16.encode (SHA256.hmac_lazy keh lut)
+        let lut = BL.fromStrict hmv7_put
+            out = B16.encode (SHA256.hmac_lazy hmv7_key lut)
         assertEqual mempty hmv7_pec out
     ]
   ]
