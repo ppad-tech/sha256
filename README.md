@@ -172,6 +172,10 @@ This library aims at the maximum security achievable in a
 garbage-collected language under an optimizing compiler such as GHC, in
 which strict constant-timeness can be challenging to achieve.
 
+The HMAC-SHA256 functions within pass all [Wycheproof vectors][wyche],
+as well as various other useful unit test vectors found around the
+internet.
+
 If you discover any vulnerabilities, please disclose them via
 security@ppad.tech.
 
@@ -205,3 +209,4 @@ development. Many parts wound up being direct translations.
 [r6234]: https://datatracker.ietf.org/doc/html/rfc6234
 [r2104]: https://datatracker.ietf.org/doc/html/rfc2104
 [noble]: https://github.com/paulmillr/noble-hashes
+[wyche]: https://github.com/C2SP/wycheproof
