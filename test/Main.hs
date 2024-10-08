@@ -1,18 +1,111 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as B16
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.IO as TIO
 import Test.Tasty
 import Test.Tasty.HUnit
+import qualified Wycheproof as W
 
 main :: IO ()
-main = defaultMain unit_tests
+main = do
+  wycheproof <- TIO.readFile "etc/wycheproof_hmac_sha256.json"
+  case A.decodeStrictText wycheproof :: Maybe W.Wycheproof of
+    Nothing -> error "couldn't parse wycheproof vectors"
+    Just w  -> defaultMain $ testGroup "ppad-sha256" [
+        unit_tests
+      , wycheproof_tests w
+      ]
+
+wycheproof_tests :: W.Wycheproof -> TestTree
+wycheproof_tests W.Wycheproof {..} = testGroup "wycheproof vectors (hmac)" $
+  fmap execute_group wp_testGroups
+
+execute_group :: W.MacTestGroup -> TestTree
+execute_group W.MacTestGroup {..} =
+    testGroup msg (fmap (execute mtg_tagSize) mtg_tests)
+  where
+    msg = "keysize " <> show mtg_keySize <> ", tagsize " <> show mtg_tagSize
+
+execute :: Int -> W.MacTest -> TestTree
+execute tag_size W.MacTest {..} = testCase t_msg $ do
+    let key = B16.decodeLenient (TE.encodeUtf8 mt_key)
+        msg = B16.decodeLenient (TE.encodeUtf8 mt_msg)
+        pec = B16.decodeLenient (TE.encodeUtf8 mt_tag)
+        out = BS.take bytes (SHA256.hmac key msg)
+    if   mt_result == "invalid"
+    then assertBool "invalid" (pec /= out)
+    else assertEqual mempty pec out
+  where
+    t_msg = "test " <> show mt_tcId -- XX embellish
+    bytes = tag_size `div` 8
+
+unit_tests :: TestTree
+unit_tests = testGroup "unit tests" [
+    testGroup "hash" [
+      cmp_hash "hv0" hv0_put hv0_pec
+    , cmp_hash "hv1" hv1_put hv1_pec
+    , cmp_hash "hv2" hv2_put hv2_pec
+    , cmp_hash "hv3" hv3_put hv3_pec
+    , cmp_hash "hv4" hv4_put hv4_pec
+    ]
+  , testGroup "hash_lazy" [
+      cmp_hash_lazy "hv0" hv0_put hv0_pec
+    , cmp_hash_lazy "hv1" hv1_put hv1_pec
+    , cmp_hash_lazy "hv2" hv2_put hv2_pec
+    , cmp_hash_lazy "hv3" hv3_put hv3_pec
+    , cmp_hash_lazy "hv4" hv4_put hv4_pec
+    ]
+  -- uncomment me to run (slow, ~30s)
+  --
+  -- , testGroup "hash_lazy (1GB input)" [
+  --     testCase "hv5" $ do
+  --       let out = B16.encode (SHA256.hash_lazy hv5_put)
+  --       assertEqual mempty hv5_pec out
+  --   ]
+  , testGroup "hmac" [
+      cmp_hmac "hmv1" hmv1_key hmv1_put hmv1_pec
+    , cmp_hmac "hmv2" hmv2_key hmv2_put hmv2_pec
+    , cmp_hmac "hmv3" hmv3_key hmv3_put hmv3_pec
+    , cmp_hmac "hmv4" hmv4_key hmv4_put hmv4_pec
+    , testCase "hmv5" $ do
+        let out = BS.take 32 $ B16.encode (SHA256.hmac hmv5_key hmv5_put)
+        assertEqual mempty hmv5_pec out
+    , testCase "hmv6" $ do
+        let out = B16.encode (SHA256.hmac hmv6_key hmv6_put)
+        assertEqual mempty hmv6_pec out
+    , testCase "hmv7" $ do
+        let out = B16.encode (SHA256.hmac hmv7_key hmv7_put)
+        assertEqual mempty hmv7_pec out
+    ]
+  , testGroup "hmac_lazy" [
+      cmp_hmac_lazy "hmv1" hmv1_key hmv1_put hmv1_pec
+    , cmp_hmac_lazy "hmv2" hmv2_key hmv2_put hmv2_pec
+    , cmp_hmac_lazy "hmv3" hmv3_key hmv3_put hmv3_pec
+    , cmp_hmac_lazy "hmv4" hmv4_key hmv4_put hmv4_pec
+    , testCase "hmv5" $ do
+        let lut = BL.fromStrict hmv5_put
+            out = BS.take 32 $ B16.encode (SHA256.hmac_lazy hmv5_key lut)
+        assertEqual mempty hmv5_pec out
+    , testCase "hmv6" $ do
+        let lut = BL.fromStrict hmv6_put
+            out = B16.encode (SHA256.hmac_lazy hmv6_key lut)
+        assertEqual mempty hmv6_pec out
+    , testCase "hmv7" $ do
+        let lut = BL.fromStrict hmv7_put
+            out = B16.encode (SHA256.hmac_lazy hmv7_key lut)
+        assertEqual mempty hmv7_pec out
+    ]
+  ]
 
 -- vectors from
 -- https://www.di-mgt.com.au/sha_testvectors.html
@@ -117,64 +210,6 @@ hmv7_put = "This is a test using a larger than block-size key and a larger than 
 
 hmv7_pec :: BS.ByteString
 hmv7_pec = "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"
-
-unit_tests :: TestTree
-unit_tests = testGroup "ppad-sha256" [
-    testGroup "hash" [
-      cmp_hash "hv0" hv0_put hv0_pec
-    , cmp_hash "hv1" hv1_put hv1_pec
-    , cmp_hash "hv2" hv2_put hv2_pec
-    , cmp_hash "hv3" hv3_put hv3_pec
-    , cmp_hash "hv4" hv4_put hv4_pec
-    ]
-  , testGroup "hash_lazy" [
-      cmp_hash_lazy "hv0" hv0_put hv0_pec
-    , cmp_hash_lazy "hv1" hv1_put hv1_pec
-    , cmp_hash_lazy "hv2" hv2_put hv2_pec
-    , cmp_hash_lazy "hv3" hv3_put hv3_pec
-    , cmp_hash_lazy "hv4" hv4_put hv4_pec
-    ]
-  -- uncomment me to run (slow, ~30s)
-  --
-  -- , testGroup "hash_lazy (1GB input)" [
-  --     testCase "hv5" $ do
-  --       let out = B16.encode (SHA256.hash_lazy hv5_put)
-  --       assertEqual mempty hv5_pec out
-  --   ]
-  , testGroup "hmac" [
-      cmp_hmac "hmv1" hmv1_key hmv1_put hmv1_pec
-    , cmp_hmac "hmv2" hmv2_key hmv2_put hmv2_pec
-    , cmp_hmac "hmv3" hmv3_key hmv3_put hmv3_pec
-    , cmp_hmac "hmv4" hmv4_key hmv4_put hmv4_pec
-    , testCase "hmv5" $ do
-        let out = BS.take 32 $ B16.encode (SHA256.hmac hmv5_key hmv5_put)
-        assertEqual mempty hmv5_pec out
-    , testCase "hmv6" $ do
-        let out = B16.encode (SHA256.hmac hmv6_key hmv6_put)
-        assertEqual mempty hmv6_pec out
-    , testCase "hmv7" $ do
-        let out = B16.encode (SHA256.hmac hmv7_key hmv7_put)
-        assertEqual mempty hmv7_pec out
-    ]
-  , testGroup "hmac_lazy" [
-      cmp_hmac_lazy "hmv1" hmv1_key hmv1_put hmv1_pec
-    , cmp_hmac_lazy "hmv2" hmv2_key hmv2_put hmv2_pec
-    , cmp_hmac_lazy "hmv3" hmv3_key hmv3_put hmv3_pec
-    , cmp_hmac_lazy "hmv4" hmv4_key hmv4_put hmv4_pec
-    , testCase "hmv5" $ do
-        let lut = BL.fromStrict hmv5_put
-            out = BS.take 32 $ B16.encode (SHA256.hmac_lazy hmv5_key lut)
-        assertEqual mempty hmv5_pec out
-    , testCase "hmv6" $ do
-        let lut = BL.fromStrict hmv6_put
-            out = B16.encode (SHA256.hmac_lazy hmv6_key lut)
-        assertEqual mempty hmv6_pec out
-    , testCase "hmv7" $ do
-        let lut = BL.fromStrict hmv7_put
-            out = B16.encode (SHA256.hmac_lazy hmv7_key lut)
-        assertEqual mempty hmv7_pec out
-    ]
-  ]
 
 cmp_hash :: String -> BS.ByteString -> BS.ByteString -> TestTree
 cmp_hash msg put pec = testCase msg $ do
