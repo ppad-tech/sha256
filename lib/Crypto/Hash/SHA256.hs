@@ -346,6 +346,7 @@ step (Registers a b c d e f g h) k w =
   let t1 = h + bsig1 e + ch e f g + k + w
       t2 = bsig0 a + maj a b c
   in  Registers (t1 + t2) a b c (d + t1) e f g
+{-# INLINE step #-}
 
 -- RFC 6234 6.2 block pipeline
 --
