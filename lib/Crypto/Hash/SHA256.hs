@@ -420,6 +420,10 @@ hash_lazy bl = cat (go iv (pad_lazy bl)) where
 -- HMAC -----------------------------------------------------------------------
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
 
+data KeyAndLen = KeyAndLen
+  {-# UNPACK #-} !BS.ByteString
+  {-# UNPACK #-} !Int
+
 -- | Produce a message authentication code for a strict bytestring,
 --   based on the provided (strict, bytestring) key, via SHA-256.
 --
@@ -434,11 +438,20 @@ hmac
   :: BS.ByteString -- ^ key
   -> BS.ByteString -- ^ text
   -> BS.ByteString
-hmac k = hmac_lazy k . BL.fromStrict
-
-data KeyAndLen = KeyAndLen
-  {-# UNPACK #-} !BS.ByteString
-  {-# UNPACK #-} !Int
+hmac mk text =
+    let step1 = k <> BS.replicate (64 - lk) 0x00
+        step2 = BS.map (B.xor 0x36) step1
+        step3 = step2 <> text
+        step4 = hash step3
+        step5 = BS.map (B.xor 0x5C) step1
+        step6 = step5 <> step4
+    in  hash step6
+  where
+    !(KeyAndLen k lk) =
+      let l = BS.length mk
+      in  if   l > 64
+          then KeyAndLen (hash mk) 32
+          else KeyAndLen mk l
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided (strict, bytestring) key, via SHA-256.
