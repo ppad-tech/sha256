@@ -1,5 +1,8 @@
 # Changelog
 
+- 0.2.2 (2025-01-07)
+  * Minor bytestring-handling optimisations.
+
 - 0.2.1 (2024-10-13)
   * Adds an INLINE pragma to an internal step function.
   * 'hmac' no longer calls 'hmac_lazy', which has no practical effect
