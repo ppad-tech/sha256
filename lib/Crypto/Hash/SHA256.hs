@@ -79,14 +79,14 @@ unsafe_splitAt n (BI.BS x l) =
 splitAt64 :: BL.ByteString -> SLPair
 splitAt64 = splitAt' (64 :: Int) where
   splitAt' _ BLI.Empty        = SLPair mempty BLI.Empty
-  splitAt' n (BLI.Chunk c cs) =
-    if    n < BS.length c
+  splitAt' n (BLI.Chunk c@(BI.PS _ _ l) cs) =
+    if    n < l
     then
       -- n < BS.length c, so unsafe_splitAt is safe
       let !(SSPair c0 c1) = unsafe_splitAt n c
       in  SLPair c0 (BLI.Chunk c1 cs)
     else
-      let SLPair cs' cs'' = splitAt' (n - BS.length c) cs
+      let SLPair cs' cs'' = splitAt' (n - l) cs
       in  SLPair (c <> cs') cs''
 
 -- variant of Data.ByteString.splitAt that behaves like an incremental
@@ -110,10 +110,8 @@ sol l =
 
 -- RFC 6234 4.1 (strict)
 pad :: BS.ByteString -> BS.ByteString
-pad m = BL.toStrict . BSB.toLazyByteString $ padded where
-  l = fi (BS.length m)
+pad m@(BI.PS _ _ (fi -> l)) = BL.toStrict . BSB.toLazyByteString $ padded where
   padded = BSB.byteString m <> fill (sol l) (BSB.word8 0x80)
-
   fill j !acc
     | j == 0 = acc <> BSB.word64BE (l * 8)
     | otherwise = fill (pred j) (acc <> BSB.word8 0x00)
@@ -358,13 +356,16 @@ unsafe_hash_alg rs bs = block_hash rs (prepare_schedule (unsafe_parse bs))
 -- register concatenation
 cat :: Registers -> BS.ByteString
 cat Registers {..} =
-    BL.toStrict
-    -- more efficient for small builder
-  . BE.toLazyByteStringWith (BE.safeStrategy 128 BE.smallChunkSize) mempty
-  $ mconcat [
-        BSB.word32BE h0, BSB.word32BE h1, BSB.word32BE h2, BSB.word32BE h3
-      , BSB.word32BE h4, BSB.word32BE h5, BSB.word32BE h6, BSB.word32BE h7
-      ]
+      BL.toStrict
+      -- more efficient for small builder
+    . BE.toLazyByteStringWith (BE.safeStrategy 128 BE.smallChunkSize) mempty
+    $     BSB.word64BE w64_0 <> BSB.word64BE w64_1
+       <> BSB.word64BE w64_2 <> BSB.word64BE w64_3
+  where
+    !w64_0 = fi h0 `B.unsafeShiftL` 32 .|. fi h1
+    !w64_1 = fi h2 `B.unsafeShiftL` 32 .|. fi h3
+    !w64_2 = fi h4 `B.unsafeShiftL` 32 .|. fi h5
+    !w64_3 = fi h6 `B.unsafeShiftL` 32 .|. fi h7
 
 -- | Compute a condensed representation of a strict bytestring via
 --   SHA-256.
@@ -439,7 +440,7 @@ hmac
   :: BS.ByteString -- ^ key
   -> BS.ByteString -- ^ text
   -> BS.ByteString
-hmac mk text =
+hmac mk@(BI.PS _ _ l) text =
     let step1 = k <> BS.replicate (64 - lk) 0x00
         step2 = BS.map (B.xor 0x36) step1
         step3 = step2 <> text
@@ -448,11 +449,9 @@ hmac mk text =
         step6 = step5 <> step4
     in  hash step6
   where
-    !(KeyAndLen k lk) =
-      let l = BS.length mk
-      in  if   l > 64
-          then KeyAndLen (hash mk) 32
-          else KeyAndLen mk l
+    !(KeyAndLen k lk)
+      | l > 64    = KeyAndLen (hash mk) 32
+      | otherwise = KeyAndLen mk l
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided (strict, bytestring) key, via SHA-256.
@@ -468,7 +467,7 @@ hmac_lazy
   :: BS.ByteString -- ^ key
   -> BL.ByteString -- ^ text
   -> BS.ByteString
-hmac_lazy mk text =
+hmac_lazy mk@(BI.PS _ _ l) text =
     let step1 = k <> BS.replicate (64 - lk) 0x00
         step2 = BS.map (B.xor 0x36) step1
         step3 = BL.fromStrict step2 <> text
@@ -477,9 +476,7 @@ hmac_lazy mk text =
         step6 = step5 <> step4
     in  hash step6
   where
-    !(KeyAndLen k lk) =
-      let l = BS.length mk
-      in  if   l > 64
-          then KeyAndLen (hash mk) 32
-          else KeyAndLen mk l
+    !(KeyAndLen k lk)
+      | l > 64    = KeyAndLen (hash mk) 32
+      | otherwise = KeyAndLen mk l
 
