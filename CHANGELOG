@@ -1,5 +1,9 @@
 # Changelog
 
+- 0.2.3 (2025-01-21)
+  * Improves padding handling for the strict bytestring case, yielding
+    performance increases for both 'hash' and 'hmac'.
+
 - 0.2.2 (2025-01-07)
   * Minor bytestring-handling optimisations.
 
