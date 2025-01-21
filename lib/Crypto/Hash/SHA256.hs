@@ -105,16 +105,86 @@ unsafe_parseWsPair (BI.BS x l) =
 -- k such that (l + 1 + k) mod 64 = 56
 sol :: Word64 -> Word64
 sol l =
-  let r = 56 - fi l `mod` 64 - 1 :: Integer -- fi prevents underflow
+  let r = 56 - fi l `rem` 64 - 1 :: Integer -- fi prevents underflow
   in  fi (if r < 0 then r + 64 else r)
 
 -- RFC 6234 4.1 (strict)
 pad :: BS.ByteString -> BS.ByteString
-pad m@(BI.PS _ _ (fi -> l)) = BL.toStrict . BSB.toLazyByteString $ padded where
-  padded = BSB.byteString m <> fill (sol l) (BSB.word8 0x80)
-  fill j !acc
-    | j == 0 = acc <> BSB.word64BE (l * 8)
-    | otherwise = fill (pred j) (acc <> BSB.word8 0x00)
+pad m@(BI.PS _ _ (fi -> l)) =
+    BL.toStrict . BE.toLazyByteStringWith
+      (BE.safeStrategy 128 BE.smallChunkSize) mempty $ padded
+  where
+    padded = BSB.byteString m
+          <> fill (sol l) (BSB.word8 0x80)
+          <> BSB.word64BE (l * 8)
+
+    fill j !acc
+      | j `rem` 8 == 0 =
+             loop64 j acc
+      | (j - 7) `rem` 8 == 0 =
+             loop64 (j - 7) acc
+          <> BSB.word32BE 0x00
+          <> BSB.word16BE 0x00
+          <> BSB.word8 0x00
+      | (j - 6) `rem` 8 == 0 =
+             loop64 (j - 6) acc
+          <> BSB.word32BE 0x00
+          <> BSB.word16BE 0x00
+      | (j - 5) `rem` 8 == 0 =
+             loop64 (j - 5) acc
+          <> BSB.word32BE 0x00
+          <> BSB.word8 0x00
+      | (j - 4) `rem` 8 == 0 =
+             loop64 (j - 4) acc
+          <> BSB.word32BE 0x00
+      | (j - 3) `rem` 8 == 0 =
+             loop64 (j - 3) acc
+          <> BSB.word16BE 0x00
+          <> BSB.word8 0x00
+      | (j - 2) `rem` 8 == 0 =
+             loop64 (j - 2) acc
+          <> BSB.word16BE 0x00
+      | (j - 1) `rem` 8 == 0 =
+             loop64 (j - 1) acc
+          <> BSB.word8 0x00
+
+      | j `rem` 4 == 0 =
+             loop32 j acc
+      | (j - 3) `rem` 4 == 0 =
+             loop32 (j - 3) acc
+          <> BSB.word16BE 0x00
+          <> BSB.word8 0x00
+      | (j - 2) `rem` 4 == 0 =
+             loop32 (j - 2) acc
+          <> BSB.word16BE 0x00
+      | (j - 1) `rem` 4 == 0 =
+             loop32 (j - 1) acc
+          <> BSB.word8 0x00
+
+      | j `rem` 2 == 0 =
+             loop16 j acc
+      | (j - 1) `rem` 2 == 0 =
+             loop16 (j - 1) acc
+          <> BSB.word8 0x00
+
+      | otherwise =
+            loop8 j acc
+
+    loop64 j !acc
+      | j == 0 = acc
+      | otherwise = loop64 (j - 8) (acc <> BSB.word64BE 0x00)
+
+    loop32 j !acc
+      | j == 0 = acc
+      | otherwise = loop32 (j - 4) (acc <> BSB.word32BE 0x00)
+
+    loop16 j !acc
+      | j == 0 = acc
+      | otherwise = loop16 (j - 2) (acc <> BSB.word16BE 0x00)
+
+    loop8 j !acc
+      | j == 0 = acc
+      | otherwise = loop8 (pred j) (acc <> BSB.word8 0x00)
 
 -- RFC 6234 4.1 (lazy)
 pad_lazy :: BL.ByteString -> BL.ByteString
