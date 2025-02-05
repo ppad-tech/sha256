@@ -99,6 +99,15 @@ unsafe_parseWsPair (BI.BS x l) =
   WSPair (unsafe_word32be (BI.BS x 4)) (BI.BS (plusForeignPtr x 4) (l - 4))
 {-# INLINE unsafe_parseWsPair #-}
 
+-- builder realization strategies
+
+to_strict :: BSB.Builder -> BS.ByteString
+to_strict = BL.toStrict . BSB.toLazyByteString
+
+to_strict_small :: BSB.Builder -> BS.ByteString
+to_strict_small = BL.toStrict . BE.toLazyByteStringWith
+  (BE.safeStrategy 128 BE.smallChunkSize) mempty
+
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
 
@@ -110,9 +119,9 @@ sol l =
 
 -- RFC 6234 4.1 (strict)
 pad :: BS.ByteString -> BS.ByteString
-pad m@(BI.PS _ _ (fi -> l)) =
-    BL.toStrict . BE.toLazyByteStringWith
-      (BE.safeStrategy 128 BE.smallChunkSize) mempty $ padded
+pad m@(BI.PS _ _ (fi -> l))
+    | l < 128 = to_strict_small padded
+    | otherwise = to_strict padded
   where
     padded = BSB.byteString m
           <> fill (sol l) (BSB.word8 0x80)
@@ -196,10 +205,8 @@ pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
   padding l k bs
     | k == 0 =
           pure
-        . BL.toStrict
+        . to_strict
           -- more efficient for small builder
-        . BE.toLazyByteStringWith
-            (BE.safeStrategy 128 BE.smallChunkSize) mempty
         $ bs <> BSB.word64BE (l * 8)
     | otherwise =
         let nacc = bs <> BSB.word8 0x00
@@ -425,12 +432,9 @@ unsafe_hash_alg rs bs = block_hash rs (prepare_schedule (unsafe_parse bs))
 
 -- register concatenation
 cat :: Registers -> BS.ByteString
-cat Registers {..} =
-      BL.toStrict
-      -- more efficient for small builder
-    . BE.toLazyByteStringWith (BE.safeStrategy 128 BE.smallChunkSize) mempty
-    $     BSB.word64BE w64_0 <> BSB.word64BE w64_1
-       <> BSB.word64BE w64_2 <> BSB.word64BE w64_3
+cat Registers {..} = to_strict_small $
+       BSB.word64BE w64_0 <> BSB.word64BE w64_1
+    <> BSB.word64BE w64_2 <> BSB.word64BE w64_3
   where
     !w64_0 = fi h0 `B.unsafeShiftL` 32 .|. fi h1
     !w64_1 = fi h2 `B.unsafeShiftL` 32 .|. fi h3
