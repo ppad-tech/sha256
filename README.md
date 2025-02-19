@@ -1,4 +1,4 @@
-# ppad-sha256
+# sha256
 
 [![](https://img.shields.io/hackage/v/ppad-sha256?color=blue)](https://hackage.haskell.org/package/ppad-sha256)
 ![](https://img.shields.io/badge/license-MIT-brightgreen)
