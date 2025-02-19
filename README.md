@@ -1,5 +1,8 @@
 # ppad-sha256
 
+[![](https://img.shields.io/hackage/v/ppad-sha256?color=blue)](https://hackage.haskell.org/package/ppad-sha256)
+![](https://img.shields.io/badge/license-MIT-brightgreen)
+
 A pure Haskell implementation of SHA-256 and HMAC-SHA256 on strict and
 lazy ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104].
 
