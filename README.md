@@ -58,42 +58,37 @@ Haddocks (API documentation, etc.) are hosted at
 The aim is best-in-class performance for pure, highly-auditable Haskell
 code.
 
-Current benchmark figures on my mid-2020 MacBook Air look like (use
+Current benchmark figures on an M4 Silicon MacBook Air look like (use
 `cabal bench` to run the benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
-  time                 1.387 μs   (1.365 μs .. 1.409 μs)
-                       0.999 R²   (0.998 R² .. 1.000 R²)
-  mean                 1.386 μs   (1.378 μs .. 1.399 μs)
-  std dev              34.07 ns   (24.55 ns .. 52.14 ns)
-  variance introduced by outliers: 31% (moderately inflated)
+  time                 879.7 ns   (879.5 ns .. 879.9 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 880.1 ns   (879.5 ns .. 882.1 ns)
+  std dev              3.504 ns   (994.6 ps .. 7.537 ns)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
-  time                 5.618 μs   (5.564 μs .. 5.681 μs)
-                       0.999 R²   (0.999 R² .. 1.000 R²)
-  mean                 5.648 μs   (5.603 μs .. 5.697 μs)
-  std dev              159.1 ns   (130.7 ns .. 194.1 ns)
-  variance introduced by outliers: 34% (moderately inflated)
+  time                 3.322 μs   (3.322 μs .. 3.322 μs)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 3.321 μs   (3.317 μs .. 3.323 μs)
+  std dev              10.53 ns   (4.987 ns .. 19.12 ns)
 ```
 
-Compare this to Hackage's famous SHA package:
+Compare this to Hackage's venerable SHA package:
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/SHA.sha256
-  time                 2.585 μs   (2.565 μs .. 2.613 μs)
-                       0.999 R²   (0.999 R² .. 1.000 R²)
-  mean                 2.635 μs   (2.616 μs .. 2.654 μs)
-  std dev              68.00 ns   (58.45 ns .. 80.94 ns)
-  variance introduced by outliers: 32% (moderately inflated)
+  time                 1.415 μs   (1.414 μs .. 1.415 μs)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 1.415 μs   (1.415 μs .. 1.415 μs)
+  std dev              1.334 ns   (1.158 ns .. 1.576 ns)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/SHA.hmacSha256
-  time                 9.672 μs   (9.533 μs .. 9.810 μs)
-                       0.998 R²   (0.998 R² .. 0.999 R²)
-  mean                 9.715 μs   (9.608 μs .. 9.858 μs)
-  std dev              394.7 ns   (315.3 ns .. 576.2 ns)
-  variance introduced by outliers: 50% (moderately inflated)
-
+  time                 5.157 μs   (5.156 μs .. 5.158 μs)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 5.158 μs   (5.157 μs .. 5.159 μs)
+  std dev              2.947 ns   (2.413 ns .. 3.606 ns)
 ```
 
 Or the relevant SHA-256-based functions from a library with similar

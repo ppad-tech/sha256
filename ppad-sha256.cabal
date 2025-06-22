@@ -43,8 +43,8 @@ test-suite sha256-tests
   build-depends:
       aeson
     , base
-    , base16-bytestring
     , bytestring
+    , ppad-base16
     , ppad-sha256
     , tasty
     , tasty-hunit
