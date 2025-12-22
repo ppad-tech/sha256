@@ -56,23 +56,23 @@ Haddocks (API documentation, etc.) are hosted at
 ## Performance
 
 The aim is best-in-class performance for pure, highly-auditable Haskell
-code.
+code. You should compile with the 'llvm' flag for maximum performance.
 
 Current benchmark figures on an M4 Silicon MacBook Air look like (use
 `cabal bench` to run the benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
-  time                 879.7 ns   (879.5 ns .. 879.9 ns)
+  time                 265.9 ns   (265.7 ns .. 266.1 ns)
                        1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 880.1 ns   (879.5 ns .. 882.1 ns)
-  std dev              3.504 ns   (994.6 ps .. 7.537 ns)
+  mean                 266.3 ns   (266.1 ns .. 266.5 ns)
+  std dev              645.1 ps   (524.2 ps .. 829.3 ps)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
-  time                 3.322 μs   (3.322 μs .. 3.322 μs)
-                       1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 3.321 μs   (3.317 μs .. 3.323 μs)
-  std dev              10.53 ns   (4.987 ns .. 19.12 ns)
+  time                 877.7 ns   (872.1 ns .. 886.0 ns)
+                       1.000 R²   (0.999 R² .. 1.000 R²)
+  mean                 873.3 ns   (871.5 ns .. 877.5 ns)
+  std dev              8.491 ns   (4.940 ns .. 15.65 ns)
 ```
 
 Compare this to Hackage's venerable SHA package:
