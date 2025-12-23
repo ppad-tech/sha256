@@ -55,8 +55,7 @@ Haddocks (API documentation, etc.) are hosted at
 
 ## Performance
 
-The aim is best-in-class performance for pure, highly-auditable Haskell
-code. You should compile with the 'llvm' flag for maximum performance.
+The aim is best-in-class performance for pure Haskell code.
 
 Current benchmark figures on an M4 Silicon MacBook Air look like (use
 `cabal bench` to run the benchmark suite):
@@ -75,82 +74,7 @@ Current benchmark figures on an M4 Silicon MacBook Air look like (use
   std dev              8.491 ns   (4.940 ns .. 15.65 ns)
 ```
 
-Compare this to Hackage's venerable SHA package:
-
-```
-  benchmarking ppad-sha256/SHA256 (32B input)/SHA.sha256
-  time                 1.415 μs   (1.414 μs .. 1.415 μs)
-                       1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 1.415 μs   (1.415 μs .. 1.415 μs)
-  std dev              1.334 ns   (1.158 ns .. 1.576 ns)
-
-  benchmarking ppad-sha256/HMAC-SHA256 (32B input)/SHA.hmacSha256
-  time                 5.157 μs   (5.156 μs .. 5.158 μs)
-                       1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 5.158 μs   (5.157 μs .. 5.159 μs)
-  std dev              2.947 ns   (2.413 ns .. 3.606 ns)
-```
-
-Or the relevant SHA-256-based functions from a library with similar
-aims, [noble-hashes][noble]:
-
-```
-SHA256 32B x 420,875 ops/sec @ 2μs/op ± 1.33% (min: 1μs, max: 3ms)
-HMAC-SHA256 32B x 97,304 ops/sec @ 10μs/op
-```
-
-When reading a 1GB input from disk and testing it with `hash_lazy`, we
-get statistics like the following:
-
-```
-   2,310,899,616 bytes allocated in the heap
-          93,800 bytes copied during GC
-          78,912 bytes maximum residency (2 sample(s))
-          35,776 bytes maximum slop
-              10 MiB total memory in use (0 MiB lost due to fragmentation)
-
-                                     Tot time (elapsed)  Avg pause  Max pause
-  Gen  0       295 colls,     0 par    0.007s   0.008s     0.0000s    0.0001s
-  Gen  1         2 colls,     0 par    0.000s   0.001s     0.0004s    0.0004s
-
-  INIT    time    0.003s  (  0.003s elapsed)
-  MUT     time   22.205s  ( 22.260s elapsed)
-  GC      time    0.007s  (  0.009s elapsed)
-  EXIT    time    0.000s  (  0.001s elapsed)
-  Total   time   22.216s  ( 22.273s elapsed)
-
-  %GC     time       0.0%  (0.0% elapsed)
-
-  Alloc rate    104,073,382 bytes per MUT second
-
-  Productivity 100.0% of total user, 99.9% of total elapsed
-```
-
-SHA.sha256 gets more like:
-
-```
-  74,403,596,936 bytes allocated in the heap
-      12,971,992 bytes copied during GC
-          79,176 bytes maximum residency (2 sample(s))
-          35,512 bytes maximum slop
-               6 MiB total memory in use (0 MiB lost due to fragmentation)
-
-                                     Tot time (elapsed)  Avg pause  Max pause
-  Gen  0     17883 colls,     0 par    0.103s   0.148s     0.0000s    0.0001s
-  Gen  1         2 colls,     0 par    0.000s   0.000s     0.0002s    0.0003s
-
-  INIT    time    0.006s  (  0.006s elapsed)
-  MUT     time   32.367s  ( 32.408s elapsed)
-  GC      time    0.104s  (  0.149s elapsed)
-  EXIT    time    0.000s  (  0.001s elapsed)
-  Total   time   32.477s  ( 32.563s elapsed)
-
-  %GC     time       0.0%  (0.0% elapsed)
-
-  Alloc rate    2,298,740,250 bytes per MUT second
-
-  Productivity  99.7% of total user, 99.5% of total elapsed
-```
+You should compile with the 'llvm' flag for maximum performance.
 
 ## Security
 
