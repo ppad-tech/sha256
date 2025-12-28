@@ -28,9 +28,13 @@
         llvm = pkgs.llvmPackages_19.llvm;
 
         base16 = ppad-base16.packages.${system}.default;
+        base16-llvm =
+          hlib.addBuildTools
+            (hlib.enableCabalFlag base16 "llvm")
+            [ llvm ];
 
         hpkgs = pkgs.haskell.packages.ghc910.extend (new: old: {
-          ppad-base16 = base16;
+          ppad-base16 = base16-llvm;
           ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {
             ppad-base16 = new.ppad-base16;
           };
