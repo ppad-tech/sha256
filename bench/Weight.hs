@@ -5,6 +5,7 @@
 module Main where
 
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.SHA256D as D
 import qualified Data.ByteString as BS
 import Weigh
 
@@ -19,10 +20,16 @@ hash =
   let !bs0 = BS.replicate 32 0
       !bs1 = BS.replicate 64 0
       !bs2 = BS.replicate 128 0
+      !bs3 = BS.replicate 12288 0
   in  wgroup "hash" $ do
         func' "hash (32B  input)" SHA256.hash bs0
         func' "hash (64B  input)" SHA256.hash bs1
         func' "hash (128B input)" SHA256.hash bs2
+        func' "hash (12288B input)" SHA256.hash bs3
+        func' "hashd (64B  input)" D.hash bs1
+        func' "hashd (128B input)" D.hash bs2
+        func' "hashd (12288B input)" D.hash bs3
+
 
 hmac :: Weigh ()
 hmac =

@@ -32,9 +32,16 @@ library
     ghc-options: -fllvm -O2
   exposed-modules:
       Crypto.Hash.SHA256
+      Crypto.Hash.SHA256.Internal
+      Crypto.Hash.SHA256.Lazy
+      Crypto.Hash.SHA256D
   build-depends:
       base >= 4.9 && < 5
     , bytestring >= 0.9 && < 0.13
+  c-sources:
+      cbits/sha256_arm.c
+  if arch(aarch64)
+    cc-options: -march=armv8-a+crypto
 
 test-suite sha256-tests
   type:                exitcode-stdio-1.0

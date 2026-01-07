@@ -3,23 +3,21 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- |
--- Module: Crypto.Hash.SHA256
+-- Module: Crypto.Hash.SHA256.Lazy
 -- Copyright: (c) 2024 Jared Tobin
 -- License: MIT
 -- Maintainer: Jared Tobin <jared@ppad.tech>
 --
--- Pure SHA-256 and HMAC-SHA256 implementations for
--- strict and lazy ByteStrings, as specified by RFC's
+-- Pure SHA-256 and HMAC-SHA256 implementations for lazy ByteStrings,
+-- as specified by RFC's
 -- [6234](https://datatracker.ietf.org/doc/html/rfc6234) and
 -- [2104](https://datatracker.ietf.org/doc/html/rfc2104).
 
-module Crypto.Hash.SHA256 (
+module Crypto.Hash.SHA256.Lazy (
   -- * SHA-256 message digest functions
-    hash
-  , hash_lazy
+    hash_lazy
 
   -- * SHA256-based MAC functions
-  , hmac
   , hmac_lazy
   ) where
 
@@ -77,10 +75,6 @@ splitAt64 = splitAt' (64 :: Int) where
 to_strict :: BSB.Builder -> BS.ByteString
 to_strict = BL.toStrict . BSB.toLazyByteString
 
-to_strict_small :: BSB.Builder -> BS.ByteString
-to_strict_small = BL.toStrict . BE.toLazyByteStringWith
-  (BE.safeStrategy 128 BE.smallChunkSize) mempty
-
 -- message padding and parsing
 -- https://datatracker.ietf.org/doc/html/rfc6234#section-4.1
 
@@ -89,84 +83,6 @@ sol :: Word64 -> Word64
 sol l =
   let r = 56 - fi l `rem` 64 - 1 :: Integer -- fi prevents underflow
   in  fi (if r < 0 then r + 64 else r)
-
--- RFC 6234 4.1 (strict)
-pad :: BS.ByteString -> BS.ByteString
-pad m@(BI.PS _ _ (fi -> l))
-    | l < 128 = to_strict_small padded
-    | otherwise = to_strict padded
-  where
-    padded = BSB.byteString m
-          <> fill (sol l) (BSB.word8 0x80)
-          <> BSB.word64BE (l * 8)
-
-    fill j !acc
-      | j `rem` 8 == 0 =
-             loop64 j acc
-      | (j - 7) `rem` 8 == 0 =
-             loop64 (j - 7) acc
-          <> BSB.word32BE 0x00
-          <> BSB.word16BE 0x00
-          <> BSB.word8 0x00
-      | (j - 6) `rem` 8 == 0 =
-             loop64 (j - 6) acc
-          <> BSB.word32BE 0x00
-          <> BSB.word16BE 0x00
-      | (j - 5) `rem` 8 == 0 =
-             loop64 (j - 5) acc
-          <> BSB.word32BE 0x00
-          <> BSB.word8 0x00
-      | (j - 4) `rem` 8 == 0 =
-             loop64 (j - 4) acc
-          <> BSB.word32BE 0x00
-      | (j - 3) `rem` 8 == 0 =
-             loop64 (j - 3) acc
-          <> BSB.word16BE 0x00
-          <> BSB.word8 0x00
-      | (j - 2) `rem` 8 == 0 =
-             loop64 (j - 2) acc
-          <> BSB.word16BE 0x00
-      | (j - 1) `rem` 8 == 0 =
-             loop64 (j - 1) acc
-          <> BSB.word8 0x00
-
-      | j `rem` 4 == 0 =
-             loop32 j acc
-      | (j - 3) `rem` 4 == 0 =
-             loop32 (j - 3) acc
-          <> BSB.word16BE 0x00
-          <> BSB.word8 0x00
-      | (j - 2) `rem` 4 == 0 =
-             loop32 (j - 2) acc
-          <> BSB.word16BE 0x00
-      | (j - 1) `rem` 4 == 0 =
-             loop32 (j - 1) acc
-          <> BSB.word8 0x00
-
-      | j `rem` 2 == 0 =
-             loop16 j acc
-      | (j - 1) `rem` 2 == 0 =
-             loop16 (j - 1) acc
-          <> BSB.word8 0x00
-
-      | otherwise =
-            loop8 j acc
-
-    loop64 j !acc
-      | j == 0 = acc
-      | otherwise = loop64 (j - 8) (acc <> BSB.word64BE 0x00)
-
-    loop32 j !acc
-      | j == 0 = acc
-      | otherwise = loop32 (j - 4) (acc <> BSB.word32BE 0x00)
-
-    loop16 j !acc
-      | j == 0 = acc
-      | otherwise = loop16 (j - 2) (acc <> BSB.word16BE 0x00)
-
-    loop8 j !acc
-      | j == 0 = acc
-      | otherwise = loop8 (pred j) (acc <> BSB.word8 0x00)
 
 -- RFC 6234 4.1 (lazy)
 pad_lazy :: BL.ByteString -> BL.ByteString
@@ -184,21 +100,6 @@ pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
     | otherwise =
         let nacc = bs <> BSB.word8 0x00
         in  padding l (pred k) nacc
-
--- | Compute a condensed representation of a strict bytestring via
---   SHA-256.
---
---   The 256-bit output digest is returned as a strict bytestring.
---
---   >>> hash "strict bytestring input"
---   "<strict 256-bit message digest>"
-hash :: BS.ByteString -> BS.ByteString
-hash bs = cat (go (iv ()) (pad bs)) where
-  go :: Registers -> BS.ByteString -> Registers
-  go !acc b
-    | BS.null b = acc
-    | otherwise = case unsafe_splitAt 64 b of
-        SSPair c r -> go (unsafe_hash_alg acc c) r
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
@@ -221,33 +122,6 @@ hash_lazy bl = cat (go (iv ()) (pad_lazy bl)) where
 data KeyAndLen = KeyAndLen
   {-# UNPACK #-} !BS.ByteString
   {-# UNPACK #-} !Int
-
--- | Produce a message authentication code for a strict bytestring,
---   based on the provided (strict, bytestring) key, via SHA-256.
---
---   The 256-bit MAC is returned as a strict bytestring.
---
---   Per RFC 2104, the key /should/ be a minimum of 32 bytes long. Keys
---   exceeding 64 bytes in length will first be hashed (via SHA-256).
---
---   >>> hmac "strict bytestring key" "strict bytestring input"
---   "<strict 256-bit MAC>"
-hmac
-  :: BS.ByteString -- ^ key
-  -> BS.ByteString -- ^ text
-  -> BS.ByteString
-hmac mk@(BI.PS _ _ l) text =
-    let step1 = k <> BS.replicate (64 - lk) 0x00
-        step2 = BS.map (B.xor 0x36) step1
-        step3 = step2 <> text
-        step4 = hash step3
-        step5 = BS.map (B.xor 0x5C) step1
-        step6 = step5 <> step4
-    in  hash step6
-  where
-    !(KeyAndLen k lk)
-      | l > 64    = KeyAndLen (hash mk) 32
-      | otherwise = KeyAndLen mk l
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided (strict, bytestring) key, via SHA-256.
@@ -272,6 +146,36 @@ hmac_lazy mk@(BI.PS _ _ l) text =
         step6 = step5 <> step4
     in  hash step6
   where
+    hash bs = cat (go (iv ()) (pad bs)) where
+      go :: Registers -> BS.ByteString -> Registers
+      go !acc b
+        | BS.null b = acc
+        | otherwise = case unsafe_splitAt 64 b of
+            SSPair c r -> go (unsafe_hash_alg acc c) r
+
+      pad m@(BI.PS _ _ (fi -> len))
+          | len < 128 = to_strict_small padded
+          | otherwise = to_strict padded
+        where
+          padded = BSB.byteString m
+                <> fill (sol len) (BSB.word8 0x80)
+                <> BSB.word64BE (len * 8)
+
+          to_strict_small = BL.toStrict . BE.toLazyByteStringWith
+            (BE.safeStrategy 128 BE.smallChunkSize) mempty
+
+          fill j !acc
+            | j `rem` 8 == 0 = loop64 j acc
+            | otherwise = loop8 j acc
+
+          loop64 j !acc
+            | j == 0 = acc
+            | otherwise = loop64 (j - 8) (acc <> BSB.word64BE 0x00)
+
+          loop8 j !acc
+            | j == 0 = acc
+            | otherwise = loop8 (pred j) (acc <> BSB.word8 0x00)
+
     !(KeyAndLen k lk)
       | l > 64    = KeyAndLen (hash mk) 32
       | otherwise = KeyAndLen mk l
