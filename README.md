@@ -4,8 +4,9 @@
 ![](https://img.shields.io/badge/license-MIT-brightgreen)
 [![](https://img.shields.io/badge/haddock-sha256-lightblue)](https://docs.ppad.tech/sha256)
 
-A pure Haskell implementation of SHA-256 and HMAC-SHA256 on strict and
-lazy ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104].
+A Haskell implementation of SHA-256 and HMAC-SHA256 on strict and lazy
+ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104], that
+uses ARM SHA2 intrinsics when available.
 
 ## Usage
 
@@ -55,23 +56,23 @@ Haddocks (API documentation, etc.) are hosted at
 
 ## Performance
 
-The aim is best-in-class performance for pure Haskell code.
-
-Current benchmark figures on an M4 Silicon MacBook Air look like (use
-`cabal bench` to run the benchmark suite):
+The aim is best-in-class performance. Current benchmark figures on an
+M4 Silicon MacBook Air, where we avail of hardware acceleration via
+ARM cryptography extensions, look like (use `cabal bench` to run the
+benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
-  time                 194.6 ns   (194.4 ns .. 194.7 ns)
+  time                 48.14 ns   (48.12 ns .. 48.18 ns)
                        1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 194.7 ns   (194.6 ns .. 194.9 ns)
-  std dev              638.1 ps   (461.8 ps .. 947.6 ps)
+  mean                 48.17 ns   (48.10 ns .. 48.22 ns)
+  std dev              196.5 ps   (107.8 ps .. 358.1 ps)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
-  time                 702.6 ns   (701.9 ns .. 703.5 ns)
+  time                 193.1 ns   (192.9 ns .. 193.5 ns)
                        1.000 R²   (1.000 R² .. 1.000 R²)
-  mean                 703.5 ns   (702.9 ns .. 704.5 ns)
-  std dev              2.654 ns   (1.724 ns .. 3.640 ns)
+  mean                 193.4 ns   (193.2 ns .. 193.7 ns)
+  std dev              767.2 ps   (507.4 ps .. 1.233 ns)
 ```
 
 You should compile with the 'llvm' flag for maximum performance.
