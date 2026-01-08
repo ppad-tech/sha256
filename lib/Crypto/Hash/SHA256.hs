@@ -26,6 +26,7 @@ module Crypto.Hash.SHA256 (
   , Lazy.hmac_lazy
   ) where
 
+import Control.Monad (unless, when)
 import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
@@ -61,40 +62,39 @@ hash m
   | sha256_arm_available = hash_arm m
   | otherwise            = cat (process m)
 
+hash_arm :: BS.ByteString -> BS.ByteString
+hash_arm = hash_arm_with mempty 0
+
 sha256_arm_available :: Bool
 sha256_arm_available = unsafePerformIO c_sha256_arm_available /= 0
 {-# NOINLINE sha256_arm_available #-}
 
-hash_arm :: BS.ByteString -> BS.ByteString
-hash_arm m@(BI.PS _ _ l) = unsafePerformIO $
+-- hash_arm, parameterized by optional 64-byte prefix and extra length
+-- for padding
+hash_arm_with
+  :: BS.ByteString  -- ^ optional 64-byte prefix (or empty)
+  -> Word64         -- ^ extra length to add for padding
+  -> BS.ByteString  -- ^ message
+  -> BS.ByteString
+hash_arm_with prefix el m@(BI.PS fp off l) = unsafePerformIO $
     allocaBytes 32 $ \state -> do
-      poke state               (0x6a09e667 :: Word32)
-      poke (state `plusPtr` 4) (0xbb67ae85 :: Word32)
-      poke (state `plusPtr` 8) (0x3c6ef372 :: Word32)
-      poke (state `plusPtr` 12) (0xa54ff53a :: Word32)
-      poke (state `plusPtr` 16) (0x510e527f :: Word32)
-      poke (state `plusPtr` 20) (0x9b05688c :: Word32)
-      poke (state `plusPtr` 24) (0x1f83d9ab :: Word32)
-      poke (state `plusPtr` 28) (0x5be0cd19 :: Word32)
+      poke_iv state
+      -- process prefix block if provided
+      unless (BS.null prefix) $ do
+        let BI.PS pfp poff _ = prefix
+        BI.unsafeWithForeignPtr pfp $ \src ->
+          c_sha256_block state (src `plusPtr` poff)
+
       go state 0
-      finalize state
-      BI.create 32 $ \out -> do
-        h0 <- peek state               :: IO Word32
-        h1 <- peek (state `plusPtr` 4) :: IO Word32
-        h2 <- peek (state `plusPtr` 8) :: IO Word32
-        h3 <- peek (state `plusPtr` 12) :: IO Word32
-        h4 <- peek (state `plusPtr` 16) :: IO Word32
-        h5 <- peek (state `plusPtr` 20) :: IO Word32
-        h6 <- peek (state `plusPtr` 24) :: IO Word32
-        h7 <- peek (state `plusPtr` 28) :: IO Word32
-        poke_word32be out 0 h0
-        poke_word32be out 4 h1
-        poke_word32be out 8 h2
-        poke_word32be out 12 h3
-        poke_word32be out 16 h4
-        poke_word32be out 20 h5
-        poke_word32be out 24 h6
-        poke_word32be out 28 h7
+
+      let !remaining@(BI.PS _ _ rlen) = BU.unsafeDrop (l - l `rem` 64) m
+          BI.PS padfp padoff _ = unsafe_padding remaining (el + fi l)
+      BI.unsafeWithForeignPtr padfp $ \src -> do
+        c_sha256_block state (src `plusPtr` padoff)
+        when (rlen >= 56) $
+          c_sha256_block state (src `plusPtr` (padoff + 64))
+
+      read_state state
   where
     go !state !j
       | j + 64 <= l = do
@@ -102,24 +102,43 @@ hash_arm m@(BI.PS _ _ l) = unsafePerformIO $
             c_sha256_block state (src `plusPtr` (off + j))
           go state (j + 64)
       | otherwise = pure ()
-      where
-        BI.PS fp off _ = m
 
-    finalize !state = do
-      let !remaining@(BI.PS _ _ len) = BU.unsafeDrop (l - l `rem` 64) m
-          BI.PS pfp poff _ = unsafe_padding remaining (fi l)
-      BI.unsafeWithForeignPtr pfp $ \src -> do
-        c_sha256_block state (src `plusPtr` poff)
-        if len >= 56
-          then c_sha256_block state (src `plusPtr` (poff + 64))
-          else pure ()
+    poke_iv :: Ptr Word32 -> IO ()
+    poke_iv !state = do
+      poke state                (0x6a09e667 :: Word32)
+      poke (state `plusPtr` 4)  (0xbb67ae85 :: Word32)
+      poke (state `plusPtr` 8)  (0x3c6ef372 :: Word32)
+      poke (state `plusPtr` 12) (0xa54ff53a :: Word32)
+      poke (state `plusPtr` 16) (0x510e527f :: Word32)
+      poke (state `plusPtr` 20) (0x9b05688c :: Word32)
+      poke (state `plusPtr` 24) (0x1f83d9ab :: Word32)
+      poke (state `plusPtr` 28) (0x5be0cd19 :: Word32)
 
-    poke_word32be :: Ptr Word8 -> Int -> Word32 -> IO ()
-    poke_word32be !p !off !w = do
-      poke (p `plusPtr` off)       (fi (w `B.unsafeShiftR` 24) :: Word8)
-      poke (p `plusPtr` (off + 1)) (fi (w `B.unsafeShiftR` 16) :: Word8)
-      poke (p `plusPtr` (off + 2)) (fi (w `B.unsafeShiftR` 8) :: Word8)
-      poke (p `plusPtr` (off + 3)) (fi w :: Word8)
+read_state :: Ptr Word32 -> IO BS.ByteString
+read_state !state = BI.create 32 $ \out -> do
+  h0 <- peek state                :: IO Word32
+  h1 <- peek (state `plusPtr` 4)  :: IO Word32
+  h2 <- peek (state `plusPtr` 8)  :: IO Word32
+  h3 <- peek (state `plusPtr` 12) :: IO Word32
+  h4 <- peek (state `plusPtr` 16) :: IO Word32
+  h5 <- peek (state `plusPtr` 20) :: IO Word32
+  h6 <- peek (state `plusPtr` 24) :: IO Word32
+  h7 <- peek (state `plusPtr` 28) :: IO Word32
+  poke_word32be out 0 h0
+  poke_word32be out 4 h1
+  poke_word32be out 8 h2
+  poke_word32be out 12 h3
+  poke_word32be out 16 h4
+  poke_word32be out 20 h5
+  poke_word32be out 24 h6
+  poke_word32be out 28 h7
+
+poke_word32be :: Ptr Word8 -> Int -> Word32 -> IO ()
+poke_word32be !p !off !w = do
+  poke (p `plusPtr` off)       (fi (w `B.unsafeShiftR` 24) :: Word8)
+  poke (p `plusPtr` (off + 1)) (fi (w `B.unsafeShiftR` 16) :: Word8)
+  poke (p `plusPtr` (off + 2)) (fi (w `B.unsafeShiftR` 8) :: Word8)
+  poke (p `plusPtr` (off + 3)) (fi w :: Word8)
 
 unsafe_padding :: BS.ByteString -> Word64 -> BS.ByteString
 unsafe_padding (BI.PS fp off r) l
@@ -148,8 +167,10 @@ unsafe_padding (BI.PS fp off r) l
       poke (p `plusPtr` 6) (fi (w `B.unsafeShiftR`  8) :: Word8)
       poke (p `plusPtr` 7) (fi w                       :: Word8)
 
-process :: BS.ByteString -> Registers
-process m@(BI.PS _ _ l) = finalize (go (iv ()) 0) where
+-- process message, parameterized by initial state and extra length for
+-- padding
+process_with :: Registers -> Word64 -> BS.ByteString -> Registers
+process_with acc0 el m@(BI.PS _ _ l) = finalize (go acc0 0) where
   go !acc !j
     | j + 64 <= l = go (block_hash acc (parse_block m j)) (j + 64)
     | otherwise   = acc
@@ -161,7 +182,10 @@ process m@(BI.PS _ _ l) = finalize (go (iv ()) 0) where
           (parse_block padded 64)
     where
       !remaining@(BI.PS _ _ len) = BU.unsafeDrop (l - l `rem` 64) m
-      !padded = unsafe_padding remaining (fi l)
+      !padded = unsafe_padding remaining (el + fi l)
+
+process :: BS.ByteString -> Registers
+process = process_with (iv ()) 0
 
 -- hmac -----------------------------------------------------------------------
 
@@ -173,14 +197,28 @@ hmac
   :: BS.ByteString -- ^ key
   -> BS.ByteString -- ^ text
   -> BS.ByteString
-hmac mk@(BI.PS _ _ l) text =
-    let step1 = k <> BS.replicate (64 - lk) 0x00
-        step2 = BS.map (B.xor 0x36) step1
-        step3 = step2 <> text
-        step4 = hash step3
-        step5 = BS.map (B.xor 0x5C) step1
-        step6 = step5 <> step4
-    in  hash step6
+hmac mk@(BI.PS _ _ l) text
+    | sha256_arm_available = hmac_arm mk text
+    | otherwise =
+        let !step1 = k <> BS.replicate (64 - lk) 0x00
+            !ipad  = BS.map (B.xor 0x36) step1
+            !opad  = BS.map (B.xor 0x5C) step1
+            -- inner hash: process ipad block, then text with extra 64 for len
+            !ipad_state = block_hash (iv ()) (parse_block ipad 0)
+            !inner = cat (process_with ipad_state 64 text)
+        in  hash (opad <> inner)
+  where
+    !(KeyAndLen k lk)
+      | l > 64    = KeyAndLen (hash mk) 32
+      | otherwise = KeyAndLen mk l
+
+hmac_arm :: BS.ByteString -> BS.ByteString -> BS.ByteString
+hmac_arm mk@(BI.PS _ _ l) text =
+    let !step1 = k <> BS.replicate (64 - lk) 0x00
+        !ipad  = BS.map (B.xor 0x36) step1
+        !opad  = BS.map (B.xor 0x5C) step1
+        !inner = hash_arm_with ipad 64 text
+    in  hash_arm (opad <> inner)
   where
     !(KeyAndLen k lk)
       | l > 64    = KeyAndLen (hash mk) 32
