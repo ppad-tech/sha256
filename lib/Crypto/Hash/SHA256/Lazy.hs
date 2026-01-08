@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -funbox-small-strict-fields #-}
+{-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ViewPatterns #-}
 
