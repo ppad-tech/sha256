@@ -32,6 +32,7 @@ library
     ghc-options: -fllvm -O2
   exposed-modules:
       Crypto.Hash.SHA256
+      Crypto.Hash.SHA256.Arm
       Crypto.Hash.SHA256.Internal
       Crypto.Hash.SHA256.Lazy
   build-depends:

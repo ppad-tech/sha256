@@ -26,12 +26,15 @@ module Crypto.Hash.SHA256.Internal (
   , word32be
   , parse_block
   , unsafe_hash_alg
+  , unsafe_padding
   ) where
 
+import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Unsafe as BU
-import Data.Word (Word8)
+import Data.Word (Word8, Word64)
+import Foreign.Marshal.Utils (copyBytes, fillBytes)
 import Foreign.Ptr (Ptr, plusPtr)
 import Foreign.Storable (poke)
 import GHC.Exts (Int#)
@@ -420,3 +423,36 @@ cat (R h0 h1 h2 h3 h4 h5 h6 h7) = BI.unsafeCreate 32 $ \ptr -> do
     byte :: Exts.Word32# -> Int# -> Word8
     byte w n = GHC.Word.W8# (Exts.wordToWord8#
       (Exts.word32ToWord# (Exts.uncheckedShiftRLWord32# w n)))
+
+-- keystroke saver
+fi :: (Integral a, Num b) => a -> b
+fi = fromIntegral
+{-# INLINE fi #-}
+
+-- RFC 6234 4.1 message padding
+unsafe_padding :: BS.ByteString -> Word64 -> BS.ByteString
+unsafe_padding (BI.PS fp off r) len
+    | r < 56 = BI.unsafeCreate 64 $ \p -> do
+        BI.unsafeWithForeignPtr fp $ \src ->
+          copyBytes p (src `plusPtr` off) r
+        poke (p `plusPtr` r) (0x80 :: Word8)
+        fillBytes (p `plusPtr` (r + 1)) 0 (55 - r)
+        poke_word64be (p `plusPtr` 56) (len * 8)
+    | otherwise = BI.unsafeCreate 128 $ \p -> do
+        BI.unsafeWithForeignPtr fp $ \src ->
+          copyBytes p (src `plusPtr` off) r
+        poke (p `plusPtr` r) (0x80 :: Word8)
+        fillBytes (p `plusPtr` (r + 1)) 0 (63 - r)
+        fillBytes (p `plusPtr` 64) 0 56
+        poke_word64be (p `plusPtr` 120) (len * 8)
+  where
+    poke_word64be :: Ptr Word8 -> Word64 -> IO ()
+    poke_word64be p w = do
+      poke p               (fi (w `B.unsafeShiftR` 56) :: Word8)
+      poke (p `plusPtr` 1) (fi (w `B.unsafeShiftR` 48) :: Word8)
+      poke (p `plusPtr` 2) (fi (w `B.unsafeShiftR` 40) :: Word8)
+      poke (p `plusPtr` 3) (fi (w `B.unsafeShiftR` 32) :: Word8)
+      poke (p `plusPtr` 4) (fi (w `B.unsafeShiftR` 24) :: Word8)
+      poke (p `plusPtr` 5) (fi (w `B.unsafeShiftR` 16) :: Word8)
+      poke (p `plusPtr` 6) (fi (w `B.unsafeShiftR`  8) :: Word8)
+      poke (p `plusPtr` 7) (fi w                       :: Word8)
