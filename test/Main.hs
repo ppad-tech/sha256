@@ -5,7 +5,6 @@
 module Main where
 
 import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA256D as D
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
@@ -47,7 +46,7 @@ execute tag_size W.MacTest {..} = testCase t_msg $ do
     let key = decodeLenient (TE.encodeUtf8 mt_key)
         msg = decodeLenient (TE.encodeUtf8 mt_msg)
         pec = decodeLenient (TE.encodeUtf8 mt_tag)
-        out = BS.take bytes (D.hmac key msg)
+        out = BS.take bytes (SHA256.hmac key msg)
     if   mt_result == "invalid"
     then assertBool "invalid" (pec /= out)
     else assertEqual mempty pec out
@@ -75,7 +74,7 @@ unit_tests = testGroup "unit tests" [
   --
   -- , testGroup "hash_lazy (1GB input)" [
   --     testCase "hv5" $ do
-  --       let out = B16.encode (D.hash_lazy hv5_put)
+  --       let out = B16.encode (SHA256.hash_lazy hv5_put)
   --       assertEqual mempty hv5_pec out
   --   ]
   , testGroup "hmac" [
@@ -84,13 +83,13 @@ unit_tests = testGroup "unit tests" [
     , cmp_hmac "hmv3" hmv3_key hmv3_put hmv3_pec
     , cmp_hmac "hmv4" hmv4_key hmv4_put hmv4_pec
     , testCase "hmv5" $ do
-        let out = BS.take 32 $ B16.encode (D.hmac hmv5_key hmv5_put)
+        let out = BS.take 32 $ B16.encode (SHA256.hmac hmv5_key hmv5_put)
         assertEqual mempty hmv5_pec out
     , testCase "hmv6" $ do
-        let out = B16.encode (D.hmac hmv6_key hmv6_put)
+        let out = B16.encode (SHA256.hmac hmv6_key hmv6_put)
         assertEqual mempty hmv6_pec out
     , testCase "hmv7" $ do
-        let out = B16.encode (D.hmac hmv7_key hmv7_put)
+        let out = B16.encode (SHA256.hmac hmv7_key hmv7_put)
         assertEqual mempty hmv7_pec out
     ]
   , testGroup "hmac_lazy" [
@@ -219,7 +218,7 @@ hmv7_pec = "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"
 
 cmp_hash :: String -> BS.ByteString -> BS.ByteString -> TestTree
 cmp_hash msg put pec = testCase msg $ do
-  let out = B16.encode (D.hash put)
+  let out = B16.encode (SHA256.hash put)
   assertEqual mempty pec out
 
 cmp_hash_lazy :: String -> BS.ByteString -> BS.ByteString -> TestTree
@@ -230,7 +229,7 @@ cmp_hash_lazy msg (BL.fromStrict -> put) pec = testCase msg $ do
 cmp_hmac
   :: String -> BS.ByteString -> BS.ByteString -> BS.ByteString -> TestTree
 cmp_hmac msg key put pec = testCase msg $ do
-  let out = B16.encode (D.hmac key put)
+  let out = B16.encode (SHA256.hmac key put)
   assertEqual mempty pec out
 
 cmp_hmac_lazy
