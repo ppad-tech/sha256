@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UnboxedTuples #-}
@@ -103,16 +102,16 @@ hash_arm_with prefix el m@(BI.PS fp off l) = unsafePerformIO $
           go state (j + 64)
       | otherwise = pure ()
 
-    poke_iv :: Ptr Word32 -> IO ()
-    poke_iv !state = do
-      poke state                (0x6a09e667 :: Word32)
-      poke (state `plusPtr` 4)  (0xbb67ae85 :: Word32)
-      poke (state `plusPtr` 8)  (0x3c6ef372 :: Word32)
-      poke (state `plusPtr` 12) (0xa54ff53a :: Word32)
-      poke (state `plusPtr` 16) (0x510e527f :: Word32)
-      poke (state `plusPtr` 20) (0x9b05688c :: Word32)
-      poke (state `plusPtr` 24) (0x1f83d9ab :: Word32)
-      poke (state `plusPtr` 28) (0x5be0cd19 :: Word32)
+poke_iv :: Ptr Word32 -> IO ()
+poke_iv !state = do
+  poke state                (0x6a09e667 :: Word32)
+  poke (state `plusPtr` 4)  (0xbb67ae85 :: Word32)
+  poke (state `plusPtr` 8)  (0x3c6ef372 :: Word32)
+  poke (state `plusPtr` 12) (0xa54ff53a :: Word32)
+  poke (state `plusPtr` 16) (0x510e527f :: Word32)
+  poke (state `plusPtr` 20) (0x9b05688c :: Word32)
+  poke (state `plusPtr` 24) (0x1f83d9ab :: Word32)
+  poke (state `plusPtr` 28) (0x5be0cd19 :: Word32)
 
 read_state :: Ptr Word32 -> IO BS.ByteString
 read_state !state = BI.create 32 $ \out -> do
@@ -198,28 +197,17 @@ hmac
   -> BS.ByteString -- ^ text
   -> BS.ByteString
 hmac mk@(BI.PS _ _ l) text
-    | sha256_arm_available = hmac_arm mk text
+    | sha256_arm_available =
+        let !inner = hash_arm_with ipad 64 text
+        in  hash_arm (opad <> inner)
     | otherwise =
-        let !step1 = k <> BS.replicate (64 - lk) 0x00
-            !ipad  = BS.map (B.xor 0x36) step1
-            !opad  = BS.map (B.xor 0x5C) step1
-            -- inner hash: process ipad block, then text with extra 64 for len
-            !ipad_state = block_hash (iv ()) (parse_block ipad 0)
+        let !ipad_state = block_hash (iv ()) (parse_block ipad 0)
             !inner = cat (process_with ipad_state 64 text)
         in  hash (opad <> inner)
   where
-    !(KeyAndLen k lk)
-      | l > 64    = KeyAndLen (hash mk) 32
-      | otherwise = KeyAndLen mk l
-
-hmac_arm :: BS.ByteString -> BS.ByteString -> BS.ByteString
-hmac_arm mk@(BI.PS _ _ l) text =
-    let !step1 = k <> BS.replicate (64 - lk) 0x00
-        !ipad  = BS.map (B.xor 0x36) step1
-        !opad  = BS.map (B.xor 0x5C) step1
-        !inner = hash_arm_with ipad 64 text
-    in  hash_arm (opad <> inner)
-  where
+    !step1 = k <> BS.replicate (64 - lk) 0x00
+    !ipad  = BS.map (B.xor 0x36) step1
+    !opad  = BS.map (B.xor 0x5C) step1
     !(KeyAndLen k lk)
       | l > 64    = KeyAndLen (hash mk) 32
       | otherwise = KeyAndLen mk l
