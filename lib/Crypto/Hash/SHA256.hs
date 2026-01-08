@@ -34,7 +34,7 @@ import Crypto.Hash.SHA256.Arm
 import Crypto.Hash.SHA256.Internal
 import qualified Crypto.Hash.SHA256.Lazy as Lazy
 
--- preliminary utils ---------------------------------------------------------
+-- utils ---------------------------------------------------------------------
 
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
@@ -42,13 +42,19 @@ fi = fromIntegral
 
 -- hash ----------------------------------------------------------------------
 
+-- | Compute a condensed representation of a strict bytestring via
+--   SHA-256.
+--
+--   The 256-bit output digest is returned as a strict bytestring.
+--
+--   >>> hash "strict bytestring input"
+--   "<strict 256-bit message digest>"
 hash :: BS.ByteString -> BS.ByteString
 hash m
   | sha256_arm_available = hash_arm m
   | otherwise            = cat (process m)
 
--- process message, parameterized by initial state and extra length for
--- padding
+-- process a message, given the specified iv
 process_with :: Registers -> Word64 -> BS.ByteString -> Registers
 process_with acc0 el m@(BI.PS _ _ l) = finalize (go acc0 0) where
   go !acc !j
@@ -73,6 +79,16 @@ data KeyAndLen = KeyAndLen
   {-# UNPACK #-} !BS.ByteString
   {-# UNPACK #-} !Int
 
+-- | Produce a message authentication code for a strict bytestring,
+--   based on the provided (strict, bytestring) key, via SHA-256.
+--
+--   The 256-bit MAC is returned as a strict bytestring.
+--
+--   Per RFC 2104, the key /should/ be a minimum of 32 bytes long. Keys
+--   exceeding 64 bytes in length will first be hashed (via SHA-256).
+--
+--   >>> hmac "strict bytestring key" "strict bytestring input"
+--   "<strict 256-bit MAC>"
 hmac
   :: BS.ByteString -- ^ key
   -> BS.ByteString -- ^ text
