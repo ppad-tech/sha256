@@ -48,6 +48,8 @@
         {
           packages.default = hpkgs.${lib};
 
+          packages.haddock = hpkgs.${lib}.doc;
+
           devShells.default = hpkgs.shellFor {
             packages = p: [
               (hlib.doBenchmark p.${lib})
