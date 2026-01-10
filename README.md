@@ -19,6 +19,7 @@ A sample GHCi session:
   > import qualified Crypto.Hash.SHA256 as SHA256
   >
   > -- 'hash' and 'hmac' operate on strict bytestrings
+  > -- 'hmac' returns a value of type 'MAC' with a constant-time Eq instance
   >
   > let hash_s = SHA256.hash "strict bytestring input"
   > let hmac_s = SHA256.hmac "strict secret" "strict bytestring input"
@@ -27,9 +28,9 @@ A sample GHCi session:
   > -- but note that the key for HMAC is always strict
   >
   > let hash_l = SHA256.hash_lazy "lazy bytestring input"
-  > let hmac_l = SHA256.hmac_lazy "strict secret" "lazy bytestring input"
+  > let MAC hmac_l = SHA256.hmac_lazy "strict secret" "lazy bytestring input"
   >
-  > -- results are always unformatted 256-bit (32-byte) strict bytestrings
+  > -- digests are always unformatted 256-bit (32-byte) strict bytestrings
   >
   > import qualified Data.ByteString as BS
   >

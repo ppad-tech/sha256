@@ -38,6 +38,7 @@ library
   build-depends:
       base >= 4.9 && < 5
     , bytestring >= 0.9 && < 0.13
+    , deepseq >= 1.4 && < 1.6
   c-sources:
       cbits/sha256_arm.c
   if arch(aarch64)
@@ -94,7 +95,6 @@ benchmark sha256-weigh
   build-depends:
       base
     , bytestring
-    , deepseq
     , ppad-sha256
     , weigh
 

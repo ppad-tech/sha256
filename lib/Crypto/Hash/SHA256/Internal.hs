@@ -1,5 +1,7 @@
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UnboxedTuples #-}
@@ -19,6 +21,8 @@ module Crypto.Hash.SHA256.Internal (
   , Registers(..)
   , pattern R
 
+  , MAC(..)
+
   , iv
   , block_hash
   , cat
@@ -29,6 +33,7 @@ module Crypto.Hash.SHA256.Internal (
   , unsafe_padding
   ) where
 
+import Control.DeepSeq (NFData(..))
 import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
@@ -41,7 +46,29 @@ import GHC.Exts (Int#)
 import qualified GHC.Exts as Exts
 import qualified GHC.Word (Word8(..))
 
--- SHA-256 internals (unboxed types for performance)
+-- | A message authentication code.
+--
+--   Note that you should compare MACs for equality using the 'Eq'
+--   instance, which performs the comparison in constant time, instead
+--   of unwrapping and comparing the underlying 'ByteStrings'.
+--
+--   >>> let foo@(MAC bs0) = hmac key "hi"
+--   >>> let bar@(MAC bs1) = hmac key "there"
+--   >>> foo == bar -- do this
+--   False
+--   >>> bs0 == bs1 -- don't do this
+--   False
+newtype MAC = MAC BS.ByteString
+  deriving newtype (Show, NFData)
+
+instance Eq MAC where
+  -- | A constant-time equality check for message authentication codes.
+  --
+  --   Runs in variable-time only for invalid inputs.
+  (MAC a@(BI.PS _ _ la)) == (MAC b@(BI.PS _ _ lb))
+    | la /= lb  = False
+    | otherwise = BS.foldl' (B..|.) 0 (BS.packZipWith B.xor a b) == 0
+
 -- https://datatracker.ietf.org/doc/html/rfc6234
 
 newtype Block = Block

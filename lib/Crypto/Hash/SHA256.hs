@@ -26,6 +26,7 @@ module Crypto.Hash.SHA256 (
   , Lazy.hash_lazy
 
   -- * SHA256-based MAC functions
+  , MAC(..)
   , hmac
   , Lazy.hmac_lazy
   ) where
@@ -97,15 +98,15 @@ data KeyAndLen = KeyAndLen
 hmac
   :: BS.ByteString -- ^ key
   -> BS.ByteString -- ^ text
-  -> BS.ByteString
+  -> MAC
 hmac mk@(BI.PS _ _ l) text
     | sha256_arm_available =
         let !inner = hash_arm_with ipad 64 text
-        in  hash_arm (opad <> inner)
+        in  MAC (hash_arm (opad <> inner))
     | otherwise =
         let !ipad_state = block_hash (iv ()) (parse_block ipad 0)
             !inner = cat (process_with ipad_state 64 text)
-        in  hash (opad <> inner)
+        in  MAC (hash (opad <> inner))
   where
     !step1 = k <> BS.replicate (64 - lk) 0x00
     !ipad  = BS.map (B.xor 0x36) step1

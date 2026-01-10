@@ -14,7 +14,7 @@ main = defaultMain [
   ]
 
 suite :: Benchmark
-suite = env setup $ \ ~(bs, bl) ->
+suite = env setup $ \ ~(bs, bl, mac0, mac1, macl0, macl1) ->
     bgroup "ppad-sha256" [
       bgroup "SHA256 (32B input)" [
         bench "hash" $ whnf SHA256.hash bs
@@ -26,10 +26,18 @@ suite = env setup $ \ ~(bs, bl) ->
       , bench "hmac_lazy" $ whnf (SHA256.hmac_lazy "key") bl
       , bench "SHA.hmacSha256" $ whnf (SHA.hmacSha256 "key") bl
       ]
+    , bgroup "MAC comparison" [
+        bench "hmac" $ nf (mac0 ==) mac1
+      , bench "hmac_lazy" $ nf (macl0 ==) macl1
+      ]
     ]
   where
     setup = do
       let bs_32B = BS.replicate 32 0
           bl_32B = BL.fromStrict bs_32B
-      pure (bs_32B, bl_32B)
+          mac0  = SHA256.hmac "key" "foo"
+          mac1  = SHA256.hmac "key" "bar"
+          macl0 = SHA256.hmac_lazy "key" "foo"
+          macl1 = SHA256.hmac_lazy "key" "bar"
+      pure (bs_32B, bl_32B, mac0, mac1, macl0, macl1)
 
