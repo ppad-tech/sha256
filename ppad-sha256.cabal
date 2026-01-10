@@ -95,6 +95,7 @@ benchmark sha256-weigh
   build-depends:
       base
     , bytestring
+    , deepseq
     , ppad-sha256
     , weigh
 
