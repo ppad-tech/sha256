@@ -33,7 +33,6 @@ module Crypto.Hash.SHA256.Internal (
   , unsafe_padding
   ) where
 
-import Control.DeepSeq (NFData(..))
 import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
@@ -59,7 +58,7 @@ import qualified GHC.Word (Word8(..))
 --   >>> bs0 == bs1 -- don't do this
 --   False
 newtype MAC = MAC BS.ByteString
-  deriving newtype (Show, NFData)
+  deriving newtype Show
 
 instance Eq MAC where
   -- | A constant-time equality check for message authentication codes.

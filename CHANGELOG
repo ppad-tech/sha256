@@ -1,5 +1,10 @@
 # Changelog
 
+- 0.3.0 (2026-01-10)
+  * The HMAC functions now produce a value of type MAC, which is a
+    newtype over a ByteString. The 'Eq' instance for MAC compares values
+    in constant time.
+
 - 0.2.5 (2026-01-08)
   * We now check if the ARM cryptographic extensions are available, and,
     if so, use them to calculate hashes. If they're unavailable we

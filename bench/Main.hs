@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -14,30 +15,30 @@ main = defaultMain [
   ]
 
 suite :: Benchmark
-suite = env setup $ \ ~(bs, bl, mac0, mac1, macl0, macl1) ->
-    bgroup "ppad-sha256" [
-      bgroup "SHA256 (32B input)" [
-        bench "hash" $ whnf SHA256.hash bs
-      , bench "hash_lazy" $ whnf SHA256.hash_lazy bl
-      , bench "SHA.sha256" $ whnf SHA.sha256 bl
+suite =
+  let !bs    = BS.replicate 32 0
+      !bl    = BL.fromStrict bs
+      !mac0  = SHA256.hmac "key" "foo"
+      !mac1  = SHA256.hmac "key" "bar"
+      !mac2  = SHA256.hmac "key" "foo"
+      !macl0 = SHA256.hmac_lazy "key" "foo"
+      !macl1 = SHA256.hmac_lazy "key" "bar"
+      !macl2 = SHA256.hmac_lazy "key" "foo"
+  in  bgroup "ppad-sha256" [
+        bgroup "SHA256 (32B input)" [
+          bench "hash" $ whnf SHA256.hash bs
+        , bench "hash_lazy" $ whnf SHA256.hash_lazy bl
+        , bench "SHA.sha256" $ whnf SHA.sha256 bl
+        ]
+      , bgroup "HMAC-SHA256 (32B input)" [
+          bench "hmac" $ whnf (SHA256.hmac "key") bs
+        , bench "hmac_lazy" $ whnf (SHA256.hmac_lazy "key") bl
+        , bench "SHA.hmacSha256" $ whnf (SHA.hmacSha256 "key") bl
+        ]
+      , bgroup "MAC comparison" [
+          bench "hmac, unequal" $ whnf (mac0 ==) mac1
+        , bench "hmac, equal" $ whnf (mac0 ==) mac2
+        , bench "hmac_lazy, unequal" $ whnf (macl0 ==) macl1
+        , bench "hmac_lazy, equal" $ whnf (macl0 ==) macl2
+        ]
       ]
-    , bgroup "HMAC-SHA256 (32B input)" [
-        bench "hmac" $ whnf (SHA256.hmac "key") bs
-      , bench "hmac_lazy" $ whnf (SHA256.hmac_lazy "key") bl
-      , bench "SHA.hmacSha256" $ whnf (SHA.hmacSha256 "key") bl
-      ]
-    , bgroup "MAC comparison" [
-        bench "hmac" $ nf (mac0 ==) mac1
-      , bench "hmac_lazy" $ nf (macl0 ==) macl1
-      ]
-    ]
-  where
-    setup = do
-      let bs_32B = BS.replicate 32 0
-          bl_32B = BL.fromStrict bs_32B
-          mac0  = SHA256.hmac "key" "foo"
-          mac1  = SHA256.hmac "key" "bar"
-          macl0 = SHA256.hmac_lazy "key" "foo"
-          macl1 = SHA256.hmac_lazy "key" "bar"
-      pure (bs_32B, bl_32B, mac0, mac1, macl0, macl1)
-
