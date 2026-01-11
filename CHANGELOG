@@ -1,5 +1,9 @@
 # Changelog
 
+- 0.3.1 (2026-01-11)
+  * Adds a basic quickcheck test suite for asserting memory safety of
+    library functions on random inputs.
+
 - 0.3.0 (2026-01-10)
   * The HMAC functions now produce a value of type MAC, which is a
     newtype over a ByteString. The 'Eq' instance for MAC compares values
