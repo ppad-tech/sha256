@@ -49,6 +49,7 @@ test-suite sha256-tests
   hs-source-dirs:      test
   main-is:             Main.hs
   other-modules:
+    Property
     Wycheproof
 
   ghc-options:
@@ -60,8 +61,10 @@ test-suite sha256-tests
     , bytestring
     , ppad-base16
     , ppad-sha256
+    , quickcheck-instances
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
     , text
 
 benchmark sha256-bench

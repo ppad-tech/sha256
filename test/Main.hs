@@ -14,6 +14,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.IO as TIO
 import Test.Tasty
 import Test.Tasty.HUnit
+import qualified Property
 import qualified Wycheproof as W
 
 main :: IO ()
@@ -24,6 +25,7 @@ main = do
     Just w  -> defaultMain $ testGroup "ppad-sha256" [
         unit_tests
       , wycheproof_tests w
+      , Property.properties
       ]
 
 wycheproof_tests :: W.Wycheproof -> TestTree
