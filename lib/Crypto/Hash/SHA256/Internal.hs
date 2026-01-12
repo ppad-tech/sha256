@@ -6,6 +6,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE UnliftedNewtypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- |
 -- Module: Crypto.Hash.SHA256.Internal
@@ -16,34 +17,52 @@
 -- SHA-256 internals.
 
 module Crypto.Hash.SHA256.Internal (
-    Block(..)
-  , pattern B
-  , Registers(..)
-  , pattern R
-
+  -- * Types
+    Block(B, ..)
+  , Registers(R, ..)
   , MAC(..)
 
-  , iv
-  , block_hash
-  , cat
+  -- * Parsing
+  , parse
+  , parse_pad1
+  , parse_pad2
 
-  , word32be
-  , parse_block
-  , unsafe_hash_alg
-  , unsafe_padding
+  -- * Serializing
+  , cat
+  , cat_into
+  , cat_into32
+
+  -- * Hash function internals
+  , update
+  , iv
+
+  -- * HMAC utilities
+  , pad_registers
+  , pad_registers_with_length
+  , xor
+  , parse_key
+
+  -- * HMAC-DRBG utilities
+  , parse_vsb
+  , parse_pad1_vsb
+  , parse_pad2_vsb
+
+  -- * Pointer-based IO utilities
+  , poke_registers
   ) where
 
 import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Unsafe as BU
-import Data.Word (Word8, Word64)
-import Foreign.Marshal.Utils (copyBytes, fillBytes)
-import Foreign.Ptr (Ptr, plusPtr)
-import Foreign.Storable (poke)
+import Data.Word (Word8, Word32, Word64)
+import qualified GHC.IO (IO(..))
+import GHC.Ptr (Ptr(..))
 import GHC.Exts (Int#)
 import qualified GHC.Exts as Exts
-import qualified GHC.Word (Word8(..))
+import qualified GHC.Word (Word32(..), Word8(..))
+
+-- types ----------------------------------------------------------------------
 
 -- | A message authentication code.
 --
@@ -68,8 +87,7 @@ instance Eq MAC where
     | la /= lb  = False
     | otherwise = BS.foldl' (B..|.) 0 (BS.packZipWith B.xor a b) == 0
 
--- https://datatracker.ietf.org/doc/html/rfc6234
-
+-- | SHA256 block.
 newtype Block = Block
   (# Exts.Word32#, Exts.Word32#, Exts.Word32#, Exts.Word32#
   ,  Exts.Word32#, Exts.Word32#, Exts.Word32#, Exts.Word32#
@@ -85,13 +103,12 @@ pattern B
   -> Block
 pattern B w00 w01 w02 w03 w04 w05 w06 w07 w08 w09 w10 w11 w12 w13 w14 w15 =
   Block
-    (# w00, w01, w02, w03
-    ,  w04, w05, w06, w07
-    ,  w08, w09, w10, w11
-    ,  w12, w13, w14, w15
+    (# w00, w01, w02, w03, w04, w05, w06, w07
+    ,  w08, w09, w10, w11, w12, w13, w14, w15
     #)
 {-# COMPLETE B #-}
 
+-- | SHA256 state.
 newtype Registers = Registers
   (# Exts.Word32#, Exts.Word32#, Exts.Word32#, Exts.Word32#
   ,  Exts.Word32#, Exts.Word32#, Exts.Word32#, Exts.Word32#
@@ -101,32 +118,25 @@ pattern R
   :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
   -> Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
   -> Registers
-pattern R w00 w01 w02 w03 w04 w05 w06 w07 =
-  Registers
-    (# w00, w01, w02, w03
-    ,  w04, w05, w06, w07
-    #)
+pattern R w00 w01 w02 w03 w04 w05 w06 w07 = Registers
+  (# w00, w01, w02, w03
+  ,  w04, w05, w06, w07
+  #)
 {-# COMPLETE R #-}
 
--- given a bytestring and offset, parse word32. length not checked.
-word32be :: BS.ByteString -> Int -> Exts.Word32#
-word32be bs m =
-  let !(GHC.Word.W8# ra) = BU.unsafeIndex bs m
-      !(GHC.Word.W8# rb) = BU.unsafeIndex bs (m + 1)
-      !(GHC.Word.W8# rc) = BU.unsafeIndex bs (m + 2)
-      !(GHC.Word.W8# rd) = BU.unsafeIndex bs (m + 3)
-      !a = Exts.wordToWord32# (Exts.word8ToWord# ra)
-      !b = Exts.wordToWord32# (Exts.word8ToWord# rb)
-      !c = Exts.wordToWord32# (Exts.word8ToWord# rc)
-      !d = Exts.wordToWord32# (Exts.word8ToWord# rd)
-      !sa = Exts.uncheckedShiftLWord32# a 24#
-      !sb = Exts.uncheckedShiftLWord32# b 16#
-      !sc = Exts.uncheckedShiftLWord32# c 08#
-  in  sa `Exts.orWord32#` sb `Exts.orWord32#` sc `Exts.orWord32#` d
-{-# INLINE word32be #-}
+-- utilities ------------------------------------------------------------------
 
-parse_block :: BS.ByteString -> Int -> Block
-parse_block bs m = B
+fi :: (Integral a, Num b) => a -> b
+fi = fromIntegral
+{-# INLINE fi #-}
+
+-- parsing (nonfinal input) ---------------------------------------------------
+
+-- | Given a bytestring and offset, parse a full block.
+--
+--   The length of the input is not checked.
+parse :: BS.ByteString -> Int -> Block
+parse bs m = B
   (word32be bs m)
   (word32be bs (m + 04))
   (word32be bs (m + 08))
@@ -143,88 +153,101 @@ parse_block bs m = B
   (word32be bs (m + 52))
   (word32be bs (m + 56))
   (word32be bs (m + 60))
-{-# INLINE parse_block #-}
+{-# INLINE parse #-}
 
--- rotate right
-rotr# :: Exts.Word32# -> Int# -> Exts.Word32#
-rotr# x n =
-  Exts.uncheckedShiftRLWord32# x n `Exts.orWord32#`
-  Exts.uncheckedShiftLWord32# x (32# Exts.-# n)
-{-# INLINE rotr# #-}
+-- | Parse the 32-bit word encoded at the given ofset.
+--
+--   The length of the input is not checked.
+word32be :: BS.ByteString -> Int -> Exts.Word32#
+word32be bs m =
+  let !(GHC.Word.W8# ra) = BU.unsafeIndex bs m
+      !(GHC.Word.W8# rb) = BU.unsafeIndex bs (m + 1)
+      !(GHC.Word.W8# rc) = BU.unsafeIndex bs (m + 2)
+      !(GHC.Word.W8# rd) = BU.unsafeIndex bs (m + 3)
+      !a  = Exts.wordToWord32# (Exts.word8ToWord# ra)
+      !b  = Exts.wordToWord32# (Exts.word8ToWord# rb)
+      !c  = Exts.wordToWord32# (Exts.word8ToWord# rc)
+      !d  = Exts.wordToWord32# (Exts.word8ToWord# rd)
+      !sa = Exts.uncheckedShiftLWord32# a 24#
+      !sb = Exts.uncheckedShiftLWord32# b 16#
+      !sc = Exts.uncheckedShiftLWord32# c 08#
+  in  sa `Exts.orWord32#` sb `Exts.orWord32#` sc `Exts.orWord32#` d
+{-# INLINE word32be #-}
 
--- logical right shift
-shr# :: Exts.Word32# -> Int# -> Exts.Word32#
-shr# = Exts.uncheckedShiftRLWord32#
-{-# INLINE shr# #-}
+-- parsing (final input) ------------------------------------------------------
 
--- ch(x, y, z) = (x & y) ^ (~x & z)
-ch# :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
-ch# x y z =
-  (x `Exts.andWord32#` y) `Exts.xorWord32#`
-  (Exts.notWord32# x `Exts.andWord32#` z)
-{-# INLINE ch# #-}
+-- | Parse the final chunk of an input message, assuming it is less than
+--   56 bytes in length (unchecked!).
+--
+--   Returns one block consisting of the chunk and padding.
+parse_pad1
+  :: BS.ByteString -- ^ final input chunk (< 56 bytes)
+  -> Word64        -- ^ length of all input
+  -> Block         -- ^ resulting block
+parse_pad1 bs l =
+  let !bits = l * 8
+      !(GHC.Word.W32# lhi) = fi (bits `B.unsafeShiftR` 32)
+      !(GHC.Word.W32# llo) = fi bits
+  in  B (w32_at bs 00) (w32_at bs 04) (w32_at bs 08) (w32_at bs 12)
+        (w32_at bs 16) (w32_at bs 20) (w32_at bs 24) (w32_at bs 28)
+        (w32_at bs 32) (w32_at bs 36) (w32_at bs 40) (w32_at bs 44)
+        (w32_at bs 48) (w32_at bs 52) lhi            llo
+{-# INLINABLE parse_pad1 #-}
 
--- maj(x, y, z) = (x & (y | z)) | (y & z)
-maj# :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
-maj# x y z =
-  (x `Exts.andWord32#` (y `Exts.orWord32#` z)) `Exts.orWord32#`
-  (y `Exts.andWord32#` z)
-{-# INLINE maj# #-}
+-- | Parse the final chunk of an input message, assuming it is at least 56
+--   bytes in length (unchecked!).
+--
+--   Returns two blocks consisting of the chunk and padding.
+parse_pad2
+  :: BS.ByteString       -- ^ final input chunk (>= 56 bytes)
+  -> Word64              -- ^ length of all input
+  -> (# Block, Block #)  -- ^ resulting blocks
+parse_pad2 bs l =
+  let !bits = l * 8
+      !z    = Exts.wordToWord32# 0##
+      !(GHC.Word.W32# lhi) = fi (bits `B.unsafeShiftR` 32)
+      !(GHC.Word.W32# llo) = fi bits
+      !block0 = B
+        (w32_at bs 00) (w32_at bs 04) (w32_at bs 08) (w32_at bs 12)
+        (w32_at bs 16) (w32_at bs 20) (w32_at bs 24) (w32_at bs 28)
+        (w32_at bs 32) (w32_at bs 36) (w32_at bs 40) (w32_at bs 44)
+        (w32_at bs 48) (w32_at bs 52) (w32_at bs 56) (w32_at bs 60)
+      !block1 = B z z z z z z z z z z z z z z lhi llo
+  in  (# block0, block1 #)
+{-# INLINABLE parse_pad2 #-}
 
--- big sigma 0: rotr2 ^ rotr13 ^ rotr22
-bsig0# :: Exts.Word32# -> Exts.Word32#
-bsig0# x =
-  rotr# x 2# `Exts.xorWord32#` rotr# x 13# `Exts.xorWord32#` rotr# x 22#
-{-# INLINE bsig0# #-}
+-- | Return the byte at offset 'i', or a padding separator or zero byte
+--   beyond the input bounds, as an unboxed 32-bit word.
+w8_as_w32_at
+  :: BS.ByteString  -- ^ input chunk
+  -> Int            -- ^ offset
+  -> Exts.Word32#
+w8_as_w32_at bs@(BI.PS _ _ l) i = Exts.wordToWord32# $ case compare i l of
+  LT -> let !(GHC.Word.W8# w) = BU.unsafeIndex bs i
+        in  Exts.word8ToWord# w
+  EQ -> 0x80##
+  _  -> 0x00##
+{-# INLINE w8_as_w32_at #-}
 
--- big sigma 1: rotr6 ^ rotr11 ^ rotr25
-bsig1# :: Exts.Word32# -> Exts.Word32#
-bsig1# x =
-  rotr# x 6# `Exts.xorWord32#` rotr# x 11# `Exts.xorWord32#` rotr# x 25#
-{-# INLINE bsig1# #-}
+-- | Return the 32-bit word encoded by four consecutive bytes at the
+--   provided offset.
+w32_at
+  :: BS.ByteString
+  -> Int
+  -> Exts.Word32#
+w32_at bs i =
+  let !wa = w8_as_w32_at bs i       `Exts.uncheckedShiftLWord32#` 24#
+      !wb = w8_as_w32_at bs (i + 1) `Exts.uncheckedShiftLWord32#` 16#
+      !wc = w8_as_w32_at bs (i + 2) `Exts.uncheckedShiftLWord32#` 08#
+      !wd = w8_as_w32_at bs (i + 3)
+  in  wa `Exts.orWord32#` wb `Exts.orWord32#` wc `Exts.orWord32#` wd
+{-# INLINE w32_at #-}
 
--- small sigma 0: rotr7 ^ rotr18 ^ shr3
-ssig0# :: Exts.Word32# -> Exts.Word32#
-ssig0# x =
-  rotr# x 7# `Exts.xorWord32#` rotr# x 18# `Exts.xorWord32#` shr# x 3#
-{-# INLINE ssig0# #-}
+-- update ---------------------------------------------------------------------
 
--- small sigma 1: rotr17 ^ rotr19 ^ shr10
-ssig1# :: Exts.Word32# -> Exts.Word32#
-ssig1# x =
-  rotr# x 17# `Exts.xorWord32#` rotr# x 19# `Exts.xorWord32#` shr# x 10#
-{-# INLINE ssig1# #-}
-
--- round step
-step#
-  :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
-  -> Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
-  -> Exts.Word32# -> Exts.Word32#
-  -> Registers
-step# a b c d e f g h k w =
-  let !t1 =                h
-        `Exts.plusWord32#` bsig1# e
-        `Exts.plusWord32#` ch# e f g
-        `Exts.plusWord32#` k
-        `Exts.plusWord32#` w
-      !t2 = bsig0# a `Exts.plusWord32#` maj# a b c
-  in  R (t1 `Exts.plusWord32#` t2) a b c (d `Exts.plusWord32#` t1) e f g
-{-# INLINE step# #-}
-
--- first 32 bits of the fractional parts of the square roots of the
--- first eight primes
-iv :: () -> Registers
-iv _ = R (Exts.wordToWord32# 0x6a09e667##)
-         (Exts.wordToWord32# 0xbb67ae85##)
-         (Exts.wordToWord32# 0x3c6ef372##)
-         (Exts.wordToWord32# 0xa54ff53a##)
-         (Exts.wordToWord32# 0x510e527f##)
-         (Exts.wordToWord32# 0x9b05688c##)
-         (Exts.wordToWord32# 0x1f83d9ab##)
-         (Exts.wordToWord32# 0x5be0cd19##)
-
-block_hash :: Registers -> Block -> Registers
-block_hash
+-- | Update register state, given new input block.
+update :: Registers -> Block -> Registers
+update
     (R h0 h1 h2 h3 h4 h5 h6 h7)
     (B b00 b01 b02 b03 b04 b05 b06 b07 b08 b09 b10 b11 b12 b13 b14 b15)
   =
@@ -282,7 +305,7 @@ block_hash
       !w62 = ssig1# w60 `p` w55 `p` ssig0# w47 `p` w46
       !w63 = ssig1# w61 `p` w56 `p` ssig0# w48 `p` w47
 
-      -- rounds (cube roots of first 64 primes)
+      -- rounds (constants are cube roots of first 64 primes)
       !(R s00a s00b s00c s00d s00e s00f s00g s00h) =
         step# h0 h1 h2 h3 h4 h5 h6 h7 (k 0x428a2f98##) w00
       !(R s01a s01b s01c s01d s01e s01f s01g s01h) =
@@ -420,65 +443,311 @@ block_hash
     k = Exts.wordToWord32#
     {-# INLINE k #-}
 
--- RFC 6234 6.2 block pipeline
---
--- invariant:
---   the input bytestring is exactly 512 bits in length
-unsafe_hash_alg :: Registers -> BS.ByteString -> Registers
-unsafe_hash_alg rs bs = block_hash rs (parse_block bs 0)
+-- rotate right
+rotr# :: Exts.Word32# -> Int# -> Exts.Word32#
+rotr# x n =
+  Exts.uncheckedShiftRLWord32# x n `Exts.orWord32#`
+  Exts.uncheckedShiftLWord32# x (32# Exts.-# n)
+{-# INLINE rotr# #-}
 
--- register concatenation
+-- logical right shift
+shr# :: Exts.Word32# -> Int# -> Exts.Word32#
+shr# = Exts.uncheckedShiftRLWord32#
+{-# INLINE shr# #-}
+
+-- ch(x, y, z) = (x & y) ^ (~x & z)
+ch# :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
+ch# x y z =
+  (x `Exts.andWord32#` y) `Exts.xorWord32#`
+  (Exts.notWord32# x `Exts.andWord32#` z)
+{-# INLINE ch# #-}
+
+-- maj(x, y, z) = (x & (y | z)) | (y & z)
+maj# :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
+maj# x y z =
+  (x `Exts.andWord32#` (y `Exts.orWord32#` z)) `Exts.orWord32#`
+  (y `Exts.andWord32#` z)
+{-# INLINE maj# #-}
+
+-- big sigma 0: rotr2 ^ rotr13 ^ rotr22
+bsig0# :: Exts.Word32# -> Exts.Word32#
+bsig0# x =
+  rotr# x 2# `Exts.xorWord32#` rotr# x 13# `Exts.xorWord32#` rotr# x 22#
+{-# INLINE bsig0# #-}
+
+-- big sigma 1: rotr6 ^ rotr11 ^ rotr25
+bsig1# :: Exts.Word32# -> Exts.Word32#
+bsig1# x =
+  rotr# x 6# `Exts.xorWord32#` rotr# x 11# `Exts.xorWord32#` rotr# x 25#
+{-# INLINE bsig1# #-}
+
+-- small sigma 0: rotr7 ^ rotr18 ^ shr3
+ssig0# :: Exts.Word32# -> Exts.Word32#
+ssig0# x =
+  rotr# x 7# `Exts.xorWord32#` rotr# x 18# `Exts.xorWord32#` shr# x 3#
+{-# INLINE ssig0# #-}
+
+-- small sigma 1: rotr17 ^ rotr19 ^ shr10
+ssig1# :: Exts.Word32# -> Exts.Word32#
+ssig1# x =
+  rotr# x 17# `Exts.xorWord32#` rotr# x 19# `Exts.xorWord32#` shr# x 10#
+{-# INLINE ssig1# #-}
+
+-- round step
+step#
+  :: Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
+  -> Exts.Word32# -> Exts.Word32# -> Exts.Word32# -> Exts.Word32#
+  -> Exts.Word32# -> Exts.Word32#
+  -> Registers
+step# a b c d e f g h k w =
+  let !t1 =                h
+        `Exts.plusWord32#` bsig1# e
+        `Exts.plusWord32#` ch# e f g
+        `Exts.plusWord32#` k
+        `Exts.plusWord32#` w
+      !t2 = bsig0# a `Exts.plusWord32#` maj# a b c
+  in  R (t1 `Exts.plusWord32#` t2) a b c (d `Exts.plusWord32#` t1) e f g
+{-# INLINE step# #-}
+
+-- initial register state; first 32 bits of the fractional parts of the
+-- square roots of the first eight primes
+iv :: () -> Registers
+iv _ = R
+  (Exts.wordToWord32# 0x6a09e667##)
+  (Exts.wordToWord32# 0xbb67ae85##)
+  (Exts.wordToWord32# 0x3c6ef372##)
+  (Exts.wordToWord32# 0xa54ff53a##)
+  (Exts.wordToWord32# 0x510e527f##)
+  (Exts.wordToWord32# 0x9b05688c##)
+  (Exts.wordToWord32# 0x1f83d9ab##)
+  (Exts.wordToWord32# 0x5be0cd19##)
+
+-- serializing ----------------------------------------------------------------
+
+-- | Concat SHA256 state into a ByteString.
 cat :: Registers -> BS.ByteString
-cat (R h0 h1 h2 h3 h4 h5 h6 h7) = BI.unsafeCreate 32 $ \ptr -> do
-    poke32be ptr 0  h0
-    poke32be ptr 4  h1
-    poke32be ptr 8  h2
-    poke32be ptr 12 h3
-    poke32be ptr 16 h4
-    poke32be ptr 20 h5
-    poke32be ptr 24 h6
-    poke32be ptr 28 h7
-  where
-    poke32be :: Ptr Word8 -> Int -> Exts.Word32# -> IO ()
-    poke32be p off w = do
-      poke (p `plusPtr` off)       (byte w 24#)
-      poke (p `plusPtr` (off + 1)) (byte w 16#)
-      poke (p `plusPtr` (off + 2)) (byte w 8#)
-      poke (p `plusPtr` (off + 3)) (byte w 0#)
+cat rs = BI.unsafeCreate 32 (cat_into rs)
+{-# INLINABLE cat #-}
 
-    byte :: Exts.Word32# -> Int# -> Word8
-    byte w n = GHC.Word.W8# (Exts.wordToWord8#
-      (Exts.word32ToWord# (Exts.uncheckedShiftRLWord32# w n)))
+-- | Serialize SHA256 state to a pointer of word32's (big-endian).
+cat_into32 :: Registers -> Ptr Word32 -> IO ()
+cat_into32 (R h0 h1 h2 h3 h4 h5 h6 h7) (Ptr addr) = GHC.IO.IO $ \s0 ->
+  case Exts.writeWord32OffAddr# addr 0# h0 s0 of { s1 ->
+  case Exts.writeWord32OffAddr# addr 1# h1 s1 of { s2 ->
+  case Exts.writeWord32OffAddr# addr 2# h2 s2 of { s3 ->
+  case Exts.writeWord32OffAddr# addr 3# h3 s3 of { s4 ->
+  case Exts.writeWord32OffAddr# addr 4# h4 s4 of { s5 ->
+  case Exts.writeWord32OffAddr# addr 5# h5 s5 of { s6 ->
+  case Exts.writeWord32OffAddr# addr 6# h6 s6 of { s7 ->
+  case Exts.writeWord32OffAddr# addr 7# h7 s7 of { s8 ->
+  (# s8, () #)
+  }}}}}}}}
+{-# INLINE cat_into32 #-}
 
--- keystroke saver
-fi :: (Integral a, Num b) => a -> b
-fi = fromIntegral
-{-# INLINE fi #-}
+-- | Serialize SHA256 state to a pointer (big-endian).
+cat_into :: Registers -> Ptr Word8 -> IO ()
+cat_into (R h0 h1 h2 h3 h4 h5 h6 h7) (Ptr addr) = GHC.IO.IO $ \s0 ->
+  case poke32be addr 00# h0 s0 of { s1 ->
+  case poke32be addr 04# h1 s1 of { s2 ->
+  case poke32be addr 08# h2 s2 of { s3 ->
+  case poke32be addr 12# h3 s3 of { s4 ->
+  case poke32be addr 16# h4 s4 of { s5 ->
+  case poke32be addr 20# h5 s5 of { s6 ->
+  case poke32be addr 24# h6 s6 of { s7 ->
+  case poke32be addr 28# h7 s7 of { s8 ->
+  (# s8, () #)
+  }}}}}}}}
+{-# INLINE cat_into #-}
 
--- RFC 6234 4.1 message padding
-unsafe_padding :: BS.ByteString -> Word64 -> BS.ByteString
-unsafe_padding (BI.PS fp off r) len
-    | r < 56 = BI.unsafeCreate 64 $ \p -> do
-        BI.unsafeWithForeignPtr fp $ \src ->
-          copyBytes p (src `plusPtr` off) r
-        poke (p `plusPtr` r) (0x80 :: Word8)
-        fillBytes (p `plusPtr` (r + 1)) 0 (55 - r)
-        poke_word64be (p `plusPtr` 56) (len * 8)
-    | otherwise = BI.unsafeCreate 128 $ \p -> do
-        BI.unsafeWithForeignPtr fp $ \src ->
-          copyBytes p (src `plusPtr` off) r
-        poke (p `plusPtr` r) (0x80 :: Word8)
-        fillBytes (p `plusPtr` (r + 1)) 0 (63 - r)
-        fillBytes (p `plusPtr` 64) 0 56
-        poke_word64be (p `plusPtr` 120) (len * 8)
-  where
-    poke_word64be :: Ptr Word8 -> Word64 -> IO ()
-    poke_word64be p w = do
-      poke p               (fi (w `B.unsafeShiftR` 56) :: Word8)
-      poke (p `plusPtr` 1) (fi (w `B.unsafeShiftR` 48) :: Word8)
-      poke (p `plusPtr` 2) (fi (w `B.unsafeShiftR` 40) :: Word8)
-      poke (p `plusPtr` 3) (fi (w `B.unsafeShiftR` 32) :: Word8)
-      poke (p `plusPtr` 4) (fi (w `B.unsafeShiftR` 24) :: Word8)
-      poke (p `plusPtr` 5) (fi (w `B.unsafeShiftR` 16) :: Word8)
-      poke (p `plusPtr` 6) (fi (w `B.unsafeShiftR`  8) :: Word8)
-      poke (p `plusPtr` 7) (fi w                       :: Word8)
+poke32be
+  :: Exts.Addr#
+  -> Int#
+  -> Exts.Word32#
+  -> Exts.State# Exts.RealWorld
+  -> Exts.State# Exts.RealWorld
+poke32be a off w s0 =
+  case Exts.writeWord8OffAddr# a off (byte# w 24#) s0 of { s1 ->
+  case Exts.writeWord8OffAddr# a (off Exts.+# 1#) (byte# w 16#) s1 of { s2 ->
+  case Exts.writeWord8OffAddr# a (off Exts.+# 2#) (byte# w 8#) s2 of { s3 ->
+  Exts.writeWord8OffAddr# a (off Exts.+# 3#) (byte# w 0#) s3
+  }}}
+{-# INLINE poke32be #-}
+
+byte# :: Exts.Word32# -> Int# -> Exts.Word8#
+byte# w n = Exts.wordToWord8#
+  (Exts.word32ToWord# (Exts.uncheckedShiftRLWord32# w n))
+{-# INLINE byte# #-}
+
+-- | Write register state to a pointer (native endian Word32s).
+poke_registers :: Ptr Word32 -> Registers -> IO ()
+poke_registers (Ptr addr) (R w0 w1 w2 w3 w4 w5 w6 w7) = GHC.IO.IO $ \s0 ->
+  case Exts.writeWord32OffAddr# addr 0# w0 s0 of { s1 ->
+  case Exts.writeWord32OffAddr# addr 1# w1 s1 of { s2 ->
+  case Exts.writeWord32OffAddr# addr 2# w2 s2 of { s3 ->
+  case Exts.writeWord32OffAddr# addr 3# w3 s3 of { s4 ->
+  case Exts.writeWord32OffAddr# addr 4# w4 s4 of { s5 ->
+  case Exts.writeWord32OffAddr# addr 5# w5 s5 of { s6 ->
+  case Exts.writeWord32OffAddr# addr 6# w6 s6 of { s7 ->
+  case Exts.writeWord32OffAddr# addr 7# w7 s7 of { s8 ->
+  (# s8, () #) }}}}}}}}
+{-# INLINE poke_registers #-}
+
+-- hmac utilities -------------------------------------------------------------
+
+-- pad registers to block
+pad_registers :: Registers -> Block
+pad_registers (R w0 w1 w2 w3 w4 w5 w6 w7) = B
+  w0 w1 w2 w3 w4 w5 w6 w7
+  (Exts.wordToWord32# 0##) (Exts.wordToWord32# 0##) (Exts.wordToWord32# 0##)
+  (Exts.wordToWord32# 0##) (Exts.wordToWord32# 0##) (Exts.wordToWord32# 0##)
+  (Exts.wordToWord32# 0##) (Exts.wordToWord32# 0##)
+{-# INLINE pad_registers #-}
+
+-- pad registers to block, using padding separator and augmented length
+-- (assumes existence of a leading block)
+pad_registers_with_length :: Registers -> Block
+pad_registers_with_length (R h0 h1 h2 h3 h4 h5 h6 h7) = B
+  h0 h1 h2 h3 h4 h5 h6 h7           -- inner hash
+  (Exts.wordToWord32# 0x80000000##) -- padding separator
+  (Exts.wordToWord32# 0x00000000##)
+  (Exts.wordToWord32# 0x00000000##)
+  (Exts.wordToWord32# 0x00000000##)
+  (Exts.wordToWord32# 0x00000000##)
+  (Exts.wordToWord32# 0x00000000##)
+  (Exts.wordToWord32# 0x00000000##) -- high 32 bits of length
+  (Exts.wordToWord32# 0x00000300##) -- low 32 bits of length
+{-# INLINABLE pad_registers_with_length #-}
+
+xor :: Block -> Exts.Word32# -> Block
+xor (B w00 w01 w02 w03 w04 w05 w06 w07 w08 w09 w10 w11 w12 w13 w14 w15) b = B
+  (Exts.xorWord32# w00 b)
+  (Exts.xorWord32# w01 b)
+  (Exts.xorWord32# w02 b)
+  (Exts.xorWord32# w03 b)
+  (Exts.xorWord32# w04 b)
+  (Exts.xorWord32# w05 b)
+  (Exts.xorWord32# w06 b)
+  (Exts.xorWord32# w07 b)
+  (Exts.xorWord32# w08 b)
+  (Exts.xorWord32# w09 b)
+  (Exts.xorWord32# w10 b)
+  (Exts.xorWord32# w11 b)
+  (Exts.xorWord32# w12 b)
+  (Exts.xorWord32# w13 b)
+  (Exts.xorWord32# w14 b)
+  (Exts.xorWord32# w15 b)
+{-# INLINE xor #-}
+
+parse_key :: BS.ByteString -> Block
+parse_key bs = B
+  (w32_zero bs 0)  (w32_zero bs 4)  (w32_zero bs 8)  (w32_zero bs 12)
+  (w32_zero bs 16) (w32_zero bs 20) (w32_zero bs 24) (w32_zero bs 28)
+  (w32_zero bs 32) (w32_zero bs 36) (w32_zero bs 40) (w32_zero bs 44)
+  (w32_zero bs 48) (w32_zero bs 52) (w32_zero bs 56) (w32_zero bs 60)
+{-# INLINE parse_key #-}
+
+-- read big-endian Word32#, zero-padding beyond input length
+w32_zero :: BS.ByteString -> Int -> Exts.Word32#
+w32_zero bs i =
+  let !wa = w8_zero bs i       `Exts.uncheckedShiftLWord32#` 24#
+      !wb = w8_zero bs (i + 1) `Exts.uncheckedShiftLWord32#` 16#
+      !wc = w8_zero bs (i + 2) `Exts.uncheckedShiftLWord32#` 08#
+      !wd = w8_zero bs (i + 3)
+  in  wa `Exts.orWord32#` wb `Exts.orWord32#` wc `Exts.orWord32#` wd
+{-# INLINE w32_zero #-}
+
+-- read byte as Word32#, returning zero beyond input length
+w8_zero :: BS.ByteString -> Int -> Exts.Word32#
+w8_zero bs@(BI.PS _ _ l) i
+  | i < l     = let !(GHC.Word.W8# w) = BU.unsafeIndex bs i
+                in  Exts.wordToWord32# (Exts.word8ToWord# w)
+  | otherwise = Exts.wordToWord32# 0##
+{-# INLINE w8_zero #-}
+
+-- hmac-drbg utilities --------------------------------------------------------
+
+-- | Parse first complete block from v || sep || dat[0:31].
+--
+--   Requires len(dat) >= 31.
+parse_vsb :: Registers -> Word8 -> BS.ByteString -> Block
+parse_vsb (R v0 v1 v2 v3 v4 v5 v6 v7) (GHC.Word.W8# sep) dat =
+  let !(GHC.Word.W8# b0) = BU.unsafeIndex dat 0
+      !(GHC.Word.W8# b1) = BU.unsafeIndex dat 1
+      !(GHC.Word.W8# b2) = BU.unsafeIndex dat 2
+      !w08 =
+            Exts.uncheckedShiftLWord32# (w8_w32 sep) 24#
+            `Exts.orWord32#`
+            Exts.uncheckedShiftLWord32# (w8_w32 b0) 16#
+            `Exts.orWord32#`
+            Exts.uncheckedShiftLWord32# (w8_w32 b1) 8#
+            `Exts.orWord32#`
+            w8_w32 b2
+  in  B v0 v1 v2 v3 v4 v5 v6 v7
+        w08
+        (word32be dat 3)  (word32be dat 7)  (word32be dat 11)
+        (word32be dat 15) (word32be dat 19) (word32be dat 23) (word32be dat 27)
+{-# INLINE parse_vsb #-}
+
+-- | Parse single padding block from v || sep || dat.
+--
+--   Requires (33 + len(dat)) < 56.
+parse_pad1_vsb :: Registers -> Word8 -> BS.ByteString -> Word64 -> Block
+parse_pad1_vsb (R v0 v1 v2 v3 v4 v5 v6 v7) sep dat total =
+  let !bits = total * 8
+      !(GHC.Word.W32# lhi) = fi (bits `B.unsafeShiftR` 32)
+      !(GHC.Word.W32# llo) = fi bits
+  in  B v0 v1 v2 v3 v4 v5 v6 v7
+        (w32_sdp sep dat 32) (w32_sdp sep dat 36)
+        (w32_sdp sep dat 40) (w32_sdp sep dat 44)
+        (w32_sdp sep dat 48) (w32_sdp sep dat 52)
+        lhi llo
+{-# INLINABLE parse_pad1_vsb #-}
+
+-- | Parse two padding blocks from v || sep || dat.
+--
+--   Requires 56 <= (33 + len(dat)) < 64.
+parse_pad2_vsb
+  :: Registers -> Word8 -> BS.ByteString -> Word64 -> (# Block, Block #)
+parse_pad2_vsb (R v0 v1 v2 v3 v4 v5 v6 v7) sep dat total =
+  let !bits = total * 8
+      !z = Exts.wordToWord32# 0##
+      !(GHC.Word.W32# lhi) = fi (bits `B.unsafeShiftR` 32)
+      !(GHC.Word.W32# llo) = fi bits
+      !b0 = B v0 v1 v2 v3 v4 v5 v6 v7
+              (w32_sdp sep dat 32) (w32_sdp sep dat 36)
+              (w32_sdp sep dat 40) (w32_sdp sep dat 44)
+              (w32_sdp sep dat 48) (w32_sdp sep dat 52)
+              (w32_sdp sep dat 56) (w32_sdp sep dat 60)
+      !b1 = B z z z z z z z z z z z z z z lhi llo
+  in  (# b0, b1 #)
+{-# INLINABLE parse_pad2_vsb #-}
+
+-- Read Word32 at offset i (>= 32) from (sep || dat || 0x80 || zeros).
+w32_sdp :: Word8 -> BS.ByteString -> Int -> Exts.Word32#
+w32_sdp sep dat i =
+  let !(GHC.Word.W8# a) = byte_sdp sep dat i
+      !(GHC.Word.W8# b) = byte_sdp sep dat (i + 1)
+      !(GHC.Word.W8# c) = byte_sdp sep dat (i + 2)
+      !(GHC.Word.W8# d) = byte_sdp sep dat (i + 3)
+  in  Exts.uncheckedShiftLWord32# (w8_w32 a) 24#
+      `Exts.orWord32#`
+      Exts.uncheckedShiftLWord32# (w8_w32 b) 16#
+      `Exts.orWord32#`
+      Exts.uncheckedShiftLWord32# (w8_w32 c) 8#
+      `Exts.orWord32#`
+      w8_w32 d
+{-# INLINE w32_sdp #-}
+
+-- Read byte at offset i (>= 32) from (sep || dat || 0x80 || zeros).
+byte_sdp :: Word8 -> BS.ByteString -> Int -> Word8
+byte_sdp sep dat@(BI.PS _ _ l) i
+  | i == 32     = sep
+  | i < 33 + l  = BU.unsafeIndex dat (i - 33)
+  | i == 33 + l = 0x80
+  | otherwise   = 0x00
+{-# INLINE byte_sdp #-}
+
+w8_w32 :: Exts.Word8# -> Exts.Word32#
+w8_w32 w = Exts.wordToWord32# (Exts.word8ToWord# w)
+{-# INLINE w8_w32 #-}
+

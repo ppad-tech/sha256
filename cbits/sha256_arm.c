@@ -28,11 +28,11 @@ static const uint32_t K[64] = {
  * Process one 64-byte block using ARM SHA256 crypto instructions.
  *
  * state: pointer to 8 uint32_t words (a,b,c,d,e,f,g,h)
- * block: pointer to 64 bytes of message data
+ * block: pointer to 16 uint32_t words (already native endian)
  *
  * The state is updated in place.
  */
-void sha256_block_arm(uint32_t *state, const uint8_t *block) {
+void sha256_block_arm(uint32_t *state, const uint32_t *block) {
     /* Load current hash state */
     uint32x4_t abcd = vld1q_u32(&state[0]);
     uint32x4_t efgh = vld1q_u32(&state[4]);
@@ -41,11 +41,11 @@ void sha256_block_arm(uint32_t *state, const uint8_t *block) {
     uint32x4_t abcd_orig = abcd;
     uint32x4_t efgh_orig = efgh;
 
-    /* Load message and convert from big-endian */
-    uint32x4_t m0 = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(&block[0])));
-    uint32x4_t m1 = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(&block[16])));
-    uint32x4_t m2 = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(&block[32])));
-    uint32x4_t m3 = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(&block[48])));
+    /* Load message (already native endian) */
+    uint32x4_t m0 = vld1q_u32(&block[0]);
+    uint32x4_t m1 = vld1q_u32(&block[4]);
+    uint32x4_t m2 = vld1q_u32(&block[8]);
+    uint32x4_t m3 = vld1q_u32(&block[12]);
 
     uint32x4_t tmp, tmp2;
 
@@ -174,7 +174,7 @@ int sha256_arm_available(void) {
 #else
 
 /* Stub implementations when ARM SHA2 is not available */
-void sha256_block_arm(uint32_t *state, const uint8_t *block) {
+void sha256_block_arm(uint32_t *state, const uint32_t *block) {
     (void)state;
     (void)block;
     /* Should never be called - use pure Haskell fallback */

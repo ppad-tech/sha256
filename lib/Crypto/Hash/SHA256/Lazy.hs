@@ -32,9 +32,6 @@ import Data.Word (Word64)
 import Foreign.ForeignPtr (plusForeignPtr)
 import Crypto.Hash.SHA256.Internal
 
--- preliminary utils
-
--- keystroke saver
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 {-# INLINE fi #-}
@@ -114,14 +111,10 @@ hash_lazy bl = cat (go (iv ()) (pad_lazy bl)) where
   go !acc bs
     | BL.null bs = acc
     | otherwise = case splitAt64 bs of
-        SLPair c r -> go (unsafe_hash_alg acc c) r
+        SLPair c r -> go (update acc (parse c 0)) r
 
 -- HMAC -----------------------------------------------------------------------
 -- https://datatracker.ietf.org/doc/html/rfc2104#section-2
-
-data KeyAndLen = KeyAndLen
-  {-# UNPACK #-} !BS.ByteString
-  {-# UNPACK #-} !Int
 
 -- | Produce a message authentication code for a lazy bytestring, based
 --   on the provided (strict, bytestring) key, via SHA-256.
@@ -151,7 +144,7 @@ hmac_lazy mk@(BI.PS _ _ l) text =
       go !acc b
         | BS.null b = acc
         | otherwise = case unsafe_splitAt 64 b of
-            SSPair c r -> go (unsafe_hash_alg acc c) r
+            SSPair c r -> go (update acc (parse c 0)) r
 
       pad m@(BI.PS _ _ (fi -> len))
           | len < 128 = to_strict_small padded
@@ -176,6 +169,4 @@ hmac_lazy mk@(BI.PS _ _ l) text =
             | j == 0 = acc
             | otherwise = loop8 (pred j) (acc <> BSB.word8 0x00)
 
-    !(KeyAndLen k lk)
-      | l > 64    = KeyAndLen (hash mk) 32
-      | otherwise = KeyAndLen mk l
+    !(k, lk) = if l > 64 then (hash mk, 32) else (mk, l)

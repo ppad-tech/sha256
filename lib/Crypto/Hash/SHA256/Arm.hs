@@ -1,5 +1,8 @@
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 -- |
 -- Module: Crypto.Hash.SHA256.Arm
@@ -9,115 +12,303 @@
 --
 -- ARM crypto extension support for SHA-256.
 
-module Crypto.Hash.SHA256.Arm (
-    sha256_arm_available
-  , hash_arm
-  , hash_arm_with
-  ) where
+module Crypto.Hash.SHA256.Arm -- (
+  --  sha256_arm_available
+  --, hash
+  --, hash_with
+  --, hmac
+  --) where
+  where
 
-import Control.Monad (unless, when)
-import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Unsafe as BU
 import Data.Word (Word8, Word32, Word64)
 import Foreign.Marshal.Alloc (allocaBytes)
-import Foreign.Ptr (Ptr, plusPtr)
-import Foreign.Storable (poke, peek)
-import Crypto.Hash.SHA256.Internal (unsafe_padding)
-import System.IO.Unsafe (unsafePerformIO)
+import Foreign.Ptr (Ptr)
+import qualified GHC.Exts as Exts
+import qualified GHC.IO (IO(..))
+import qualified GHC.Ptr
+import Crypto.Hash.SHA256.Internal hiding (update)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
--- ffi -----------------------------------------------------------------------
+-- ffi ------------------------------------------------------------------------
 
 foreign import ccall unsafe "sha256_block_arm"
-  c_sha256_block :: Ptr Word32 -> Ptr Word8 -> IO ()
+  c_sha256_block :: Ptr Word32 -> Ptr Word32 -> IO ()
 
 foreign import ccall unsafe "sha256_arm_available"
   c_sha256_arm_available :: IO Int
 
--- utilities -----------------------------------------------------------------
+-- utilities ------------------------------------------------------------------
 
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 {-# INLINE fi #-}
 
+
+peek_registers
+  :: Ptr Word32
+  -> Registers
+peek_registers (GHC.Ptr.Ptr addr) = R
+  (Exts.indexWord32OffAddr# addr 0#)
+  (Exts.indexWord32OffAddr# addr 1#)
+  (Exts.indexWord32OffAddr# addr 2#)
+  (Exts.indexWord32OffAddr# addr 3#)
+  (Exts.indexWord32OffAddr# addr 4#)
+  (Exts.indexWord32OffAddr# addr 5#)
+  (Exts.indexWord32OffAddr# addr 6#)
+  (Exts.indexWord32OffAddr# addr 7#)
+{-# INLINE peek_registers #-}
+
+poke_block :: Ptr Word32 -> Block -> IO ()
+poke_block
+    (GHC.Ptr.Ptr addr)
+    (B w00 w01 w02 w03 w04 w05 w06 w07 w08 w09 w10 w11 w12 w13 w14 w15)
+  = GHC.IO.IO $ \s00 ->
+      case Exts.writeWord32OffAddr# addr 00# w00 s00 of { s01 ->
+      case Exts.writeWord32OffAddr# addr 01# w01 s01 of { s02 ->
+      case Exts.writeWord32OffAddr# addr 02# w02 s02 of { s03 ->
+      case Exts.writeWord32OffAddr# addr 03# w03 s03 of { s04 ->
+      case Exts.writeWord32OffAddr# addr 04# w04 s04 of { s05 ->
+      case Exts.writeWord32OffAddr# addr 05# w05 s05 of { s06 ->
+      case Exts.writeWord32OffAddr# addr 06# w06 s06 of { s07 ->
+      case Exts.writeWord32OffAddr# addr 07# w07 s07 of { s08 ->
+      case Exts.writeWord32OffAddr# addr 08# w08 s08 of { s09 ->
+      case Exts.writeWord32OffAddr# addr 09# w09 s09 of { s10 ->
+      case Exts.writeWord32OffAddr# addr 10# w10 s10 of { s11 ->
+      case Exts.writeWord32OffAddr# addr 11# w11 s11 of { s12 ->
+      case Exts.writeWord32OffAddr# addr 12# w12 s12 of { s13 ->
+      case Exts.writeWord32OffAddr# addr 13# w13 s13 of { s14 ->
+      case Exts.writeWord32OffAddr# addr 14# w14 s14 of { s15 ->
+      case Exts.writeWord32OffAddr# addr 15# w15 s15 of { s16 ->
+      (# s16, () #) }}}}}}}}}}}}}}}}
+{-# INLINE poke_block #-}
+
+-- update ---------------------------------------------------------------------
+
+update :: Ptr Word32 -> Ptr Word32 -> Block -> IO ()
+update rp bp block = do
+  poke_block bp block
+  c_sha256_block rp bp
+{-# INLINE update #-}
+
+data BoxedRegisters = BoxedRegisters !Registers
+
+update_pure :: Registers -> Block -> Registers
+update_pure r b =
+  let !(BoxedRegisters rs) = _update r b
+  in  rs
+{-# INLINE update_pure #-}
+
+_update :: Registers -> Block -> BoxedRegisters
+_update r b = unsafeDupablePerformIO $
+  allocaBytes 32 $ \rp ->
+  allocaBytes 64 $ \bp -> do
+    poke_registers rp r
+    poke_block bp b
+    c_sha256_block rp bp
+    pure (BoxedRegisters (peek_registers rp))
+{-# INLINE _update #-}
+
 -- api -----------------------------------------------------------------------
 
+-- | Are ARM +sha2 extensions available?
 sha256_arm_available :: Bool
-sha256_arm_available = unsafePerformIO c_sha256_arm_available /= 0
+sha256_arm_available = unsafeDupablePerformIO c_sha256_arm_available /= 0
 {-# NOINLINE sha256_arm_available #-}
 
-hash_arm :: BS.ByteString -> BS.ByteString
-hash_arm = hash_arm_with mempty 0
-
--- | Hash with optional 64-byte prefix and extra length for padding.
-hash_arm_with
-  :: BS.ByteString  -- ^ optional 64-byte prefix (or empty)
-  -> Word64         -- ^ extra length to add for padding
-  -> BS.ByteString  -- ^ message
+hash
+  :: BS.ByteString
   -> BS.ByteString
-hash_arm_with prefix el m@(BI.PS fp off l) = unsafePerformIO $
-    allocaBytes 32 $ \state -> do
-      poke_iv state
-      -- process prefix block if provided
-      unless (BS.null prefix) $ do
-        let BI.PS pfp poff _ = prefix
-        BI.unsafeWithForeignPtr pfp $ \src ->
-          c_sha256_block state (src `plusPtr` poff)
+hash m = unsafeDupablePerformIO $
+  allocaBytes 32 $ \rp ->
+  allocaBytes 64 $ \bp -> do
+    poke_registers rp (iv ())
+    _hash rp bp 0 m
+    let !rs = peek_registers rp
+    pure (cat rs)
 
-      go state 0
+_hash
+  :: Ptr Word32    -- ^ register state
+  -> Ptr Word32    -- ^ block state
+  -> Word64        -- ^ extra prefix length, for padding calculation
+  -> BS.ByteString -- ^ input
+  -> IO ()
+_hash rp bp el m@(BI.PS _ _ l) = do
+  hash_blocks rp bp m
+  let !fin@(BI.PS _ _ ll) = BU.unsafeDrop (l - l `rem` 64) m
+      !total = el + fi l
+  if   ll < 56
+  then do
+    let !ult = parse_pad1 fin total
+    update rp bp ult
+  else do
+    let !(# pen, ult #) = parse_pad2 fin total
+    update rp bp pen
+    update rp bp ult
+{-# INLINABLE _hash #-}
 
-      let !remaining@(BI.PS _ _ rlen) = BU.unsafeDrop (l - l `rem` 64) m
-          BI.PS padfp padoff _ = unsafe_padding remaining (el + fi l)
-      BI.unsafeWithForeignPtr padfp $ \src -> do
-        c_sha256_block state (src `plusPtr` padoff)
-        when (rlen >= 56) $
-          c_sha256_block state (src `plusPtr` (padoff + 64))
+hash_blocks
+  :: Ptr Word32    -- ^ register state
+  -> Ptr Word32    -- ^ block state
+  -> BS.ByteString -- ^ input
+  -> IO ()
+hash_blocks rp bp m@(BI.PS _ _ l) = loop 0 where
+  loop !j
+    | j + 64 > l = pure ()
+    | otherwise  = do
+        let !block = parse m j
+        update rp bp block
+        loop (j + 64)
+{-# INLINE hash_blocks #-}
 
-      read_state state
-  where
-    go !state !j
-      | j + 64 <= l = do
-          BI.unsafeWithForeignPtr fp $ \src ->
-            c_sha256_block state (src `plusPtr` (off + j))
-          go state (j + 64)
-      | otherwise = pure ()
+-- hmac ------------------------------------------------------------------------
 
--- arm helpers ---------------------------------------------------------------
+hmac :: BS.ByteString -> BS.ByteString -> BS.ByteString
+hmac k m = unsafeDupablePerformIO $
+  allocaBytes 32 $ \rp ->
+  allocaBytes 64 $ \bp -> do
+    _hmac rp bp (prep_key k) m
+    pure (cat (peek_registers rp))
 
-poke_iv :: Ptr Word32 -> IO ()
-poke_iv !state = do
-  poke state                (0x6a09e667 :: Word32)
-  poke (state `plusPtr` 4)  (0xbb67ae85 :: Word32)
-  poke (state `plusPtr` 8)  (0x3c6ef372 :: Word32)
-  poke (state `plusPtr` 12) (0xa54ff53a :: Word32)
-  poke (state `plusPtr` 16) (0x510e527f :: Word32)
-  poke (state `plusPtr` 20) (0x9b05688c :: Word32)
-  poke (state `plusPtr` 24) (0x1f83d9ab :: Word32)
-  poke (state `plusPtr` 28) (0x5be0cd19 :: Word32)
+prep_key :: BS.ByteString -> Block
+prep_key k@(BI.PS _ _ l)
+    | l > 64    = parse_key (hash k)
+    | otherwise = parse_key k
+{-# INLINABLE prep_key #-}
 
-read_state :: Ptr Word32 -> IO BS.ByteString
-read_state !state = BI.create 32 $ \out -> do
-  h0 <- peek state                :: IO Word32
-  h1 <- peek (state `plusPtr` 4)  :: IO Word32
-  h2 <- peek (state `plusPtr` 8)  :: IO Word32
-  h3 <- peek (state `plusPtr` 12) :: IO Word32
-  h4 <- peek (state `plusPtr` 16) :: IO Word32
-  h5 <- peek (state `plusPtr` 20) :: IO Word32
-  h6 <- peek (state `plusPtr` 24) :: IO Word32
-  h7 <- peek (state `plusPtr` 28) :: IO Word32
-  poke_word32be out 0 h0
-  poke_word32be out 4 h1
-  poke_word32be out 8 h2
-  poke_word32be out 12 h3
-  poke_word32be out 16 h4
-  poke_word32be out 20 h5
-  poke_word32be out 24 h6
-  poke_word32be out 28 h7
+-- assume padded key as block.
+_hmac
+  :: Ptr Word32    -- ^ register state
+  -> Ptr Word32    -- ^ block state
+  -> Block         -- ^ padded key
+  -> BS.ByteString -- ^ message
+  -> IO ()
+_hmac rp bp k m = do
+  poke_registers rp (iv ())
+  update rp bp (xor k (Exts.wordToWord32# 0x36363636##))
+  _hash rp bp 64 m
+  let !block = pad_registers_with_length (peek_registers rp)
+  poke_registers rp (iv ())
+  update rp bp (xor k (Exts.wordToWord32# 0x5C5C5C5C##))
+  update rp bp block
+{-# INLINABLE _hmac #-}
 
-poke_word32be :: Ptr Word8 -> Int -> Word32 -> IO ()
-poke_word32be !p !off !w = do
-  poke (p `plusPtr` off)       (fi (w `B.unsafeShiftR` 24) :: Word8)
-  poke (p `plusPtr` (off + 1)) (fi (w `B.unsafeShiftR` 16) :: Word8)
-  poke (p `plusPtr` (off + 2)) (fi (w `B.unsafeShiftR` 8) :: Word8)
-  poke (p `plusPtr` (off + 3)) (fi w :: Word8)
+_hmac_rr
+  :: Ptr Word32 -- ^ register state
+  -> Ptr Word32 -- ^ block state
+  -> Registers  -- ^ key
+  -> Registers  -- ^ message
+  -> IO ()
+_hmac_rr rp bp k m =  do
+  let !key   = pad_registers k
+      !block = pad_registers_with_length m
+  _hmac_bb rp bp key block
+{-# INLINABLE _hmac_rr #-}
+
+_hmac_bb
+  :: Ptr Word32  -- ^ register state
+  -> Ptr Word32  -- ^ block state
+  -> Block       -- ^ padded key
+  -> Block       -- ^ padded message
+  -> IO ()
+_hmac_bb rp bp k m = do
+  poke_registers rp (iv ())
+  update rp bp (xor k (Exts.wordToWord32# 0x36363636##))
+  update rp bp m
+  let !inner = pad_registers_with_length (peek_registers rp)
+  poke_registers rp (iv ())
+  update rp bp (xor k (Exts.wordToWord32# 0x5C5C5C5C##))
+  update rp bp inner
+{-# INLINABLE _hmac_bb #-}
+
+hmac_rm :: Registers -> BS.ByteString -> Registers
+hmac_rm k m =
+  let !(BoxedRegisters rs) = _hmac_rm k m
+  in  rs
+{-# INLINABLE hmac_rm #-}
+
+_hmac_rm :: Registers -> BS.ByteString -> BoxedRegisters
+_hmac_rm k m = unsafeDupablePerformIO $
+  allocaBytes 32 $ \rp ->
+  allocaBytes 64 $ \bp -> do
+    let !key = pad_registers k
+    _hmac rp bp key m
+    pure (BoxedRegisters (peek_registers rp))
+{-# INLINABLE _hmac_rm #-}
+
+hmac_rr :: Registers -> Registers -> Registers
+hmac_rr k m =
+  let !(BoxedRegisters rs) = _hmac_rr_pure k m
+  in  rs
+{-# INLINABLE hmac_rr #-}
+
+_hmac_rr_pure :: Registers -> Registers -> BoxedRegisters
+_hmac_rr_pure k m = unsafeDupablePerformIO $
+  allocaBytes 32 $ \rp ->
+  allocaBytes 64 $ \bp -> do
+    _hmac_rr rp bp k m
+    pure (BoxedRegisters (peek_registers rp))
+{-# INLINABLE _hmac_rr_pure #-}
+
+-- | HMAC(key, v || sep || data) using ARM crypto extensions.
+-- Writes result to destination pointer.
+_hmac_rsb
+  :: Ptr Word32    -- ^ destination (8 Word32s)
+  -> Ptr Word32    -- ^ scratch block buffer (16 Word32s)
+  -> Registers     -- ^ key
+  -> Registers     -- ^ v
+  -> Word8         -- ^ separator byte
+  -> BS.ByteString -- ^ data
+  -> IO ()
+_hmac_rsb rp bp k v sep dat = do
+  poke_registers rp (iv ())
+  let !key = pad_registers k
+  update rp bp (xor key (Exts.wordToWord32# 0x36363636##))
+  _hash_vsb rp bp 64 v sep dat
+  let !inner = pad_registers_with_length (peek_registers rp)
+  poke_registers rp (iv ())
+  update rp bp (xor key (Exts.wordToWord32# 0x5C5C5C5C##))
+  update rp bp inner
+{-# INLINABLE _hmac_rsb #-}
+
+-- | Hash (v || sep || dat) with ARM crypto extensions.
+-- Assumes register state already initialized at rp.
+_hash_vsb
+  :: Ptr Word32    -- ^ register state
+  -> Ptr Word32    -- ^ block buffer
+  -> Word64        -- ^ extra prefix length
+  -> Registers     -- ^ v
+  -> Word8         -- ^ sep
+  -> BS.ByteString -- ^ dat
+  -> IO ()
+_hash_vsb rp bp el v sep dat@(BI.PS _ _ l)
+  | l >= 31 = do
+      -- first block is complete: v || sep || dat[0:31]
+      let !b0 = parse_vsb v sep dat
+      update rp bp b0
+      -- hash remaining complete blocks from dat[31:]
+      let !rest    = BU.unsafeDrop 31 dat
+          !restLen = l - 31
+      hash_blocks rp bp rest
+      -- handle final padding
+      let !finLen = restLen `rem` 64
+          !fin    = BU.unsafeDrop (restLen - finLen) rest
+          !total  = el + 33 + fi l
+      if   finLen < 56
+      then update rp bp (parse_pad1 fin total)
+      else do
+        let !(# pen, ult #) = parse_pad2 fin total
+        update rp bp pen
+        update rp bp ult
+  | otherwise = do
+      -- message < 64 bytes total, straight to padding
+      let !total = el + 33 + fi l
+      if   33 + l < 56
+      then update rp bp (parse_pad1_vsb v sep dat total)
+      else do
+        let !(# pen, ult #) = parse_pad2_vsb v sep dat total
+        update rp bp pen
+        update rp bp ult
+{-# INLINABLE _hash_vsb #-}
