@@ -31,7 +31,7 @@ module Crypto.Hash.SHA256 (
   , Lazy.hmac_lazy
 
   -- low-level specialized primitives
-  , hmac_rr_unsafe
+  , _hmac_rr
   , hmac_rsb_unsafe
   ) where
 
@@ -51,6 +51,8 @@ fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 {-# INLINE fi #-}
 
+-- hash -----------------------------------------------------------------------
+
 -- | Compute a condensed representation of a strict bytestring via
 --   SHA-256.
 --
@@ -62,6 +64,7 @@ hash :: BS.ByteString -> BS.ByteString
 hash m
   | Arm.sha256_arm_available = Arm.hash m
   | otherwise = cat (_hash 0 (iv ()) m)
+{-# INLINABLE hash #-}
 
 _hash
   :: Word64        -- ^ extra prefix length for padding calculations
@@ -93,6 +96,39 @@ _hash_blocks rs m@(BI.PS _ _ l) = loop rs 0 where
         in  loop nacc (j + 64)
 {-# INLINABLE _hash_blocks #-}
 
+-- hash (registers || sep || dat) with a custom initial state and extra prefix
+-- length
+_hash_vsb
+  :: Word64        -- ^ extra prefix length
+  -> Registers     -- ^ initial state
+  -> Registers     -- ^ v
+  -> Word8         -- ^ sep
+  -> BS.ByteString -- ^ dat
+  -> Registers
+_hash_vsb el rs0 v sep dat@(BI.PS _ _ l)
+  | l >= 31 =
+      -- first block is complete
+      let !b0    = parse_vsb v sep dat
+          !rs1   = update rs0 b0
+          !rest  = BU.unsafeDrop 31 dat
+          !rlen  = l - 31
+          !rs2   = _hash_blocks rs1 rest
+          !flen  = rlen `rem` 64
+          !fin   = BU.unsafeDrop (rlen - flen) rest
+          !total = el + 33 + fi l
+      in  if   flen < 56
+          then update rs2 (parse_pad1 fin total)
+          else let !(# pen, ult #) = parse_pad2 fin total
+               in  update (update rs2 pen) ult
+  | otherwise =
+      -- message < 64 bytes, goes straight to padding
+      let !total = el + 33 + fi l
+      in  if   33 + l < 56
+          then update rs0 (parse_pad1_vsb v sep dat total)
+          else let !(# pen, ult #) = parse_pad2_vsb v sep dat total
+               in  update (update rs0 pen) ult
+{-# INLINABLE _hash_vsb #-}
+
 -- hmac ----------------------------------------------------------------------
 
 -- | Compute a condensed representation of a strict bytestring via
@@ -106,6 +142,7 @@ hmac :: BS.ByteString -> BS.ByteString -> MAC
 hmac k m
   | Arm.sha256_arm_available = MAC (Arm.hmac k m)
   | otherwise = MAC (cat (_hmac (prep_key k) m))
+{-# INLINABLE hmac #-}
 
 prep_key :: BS.ByteString -> Block
 prep_key k@(BI.PS _ _ l)
@@ -143,69 +180,34 @@ _hmac_rsb
   -> Word8         -- ^ separator byte
   -> BS.ByteString -- ^ data
   -> Registers
-_hmac_rsb k v sep dat
-  -- XX add Arm.hmac_rsb when available
-  -- | Arm.sha256_arm_available = Arm.hmac_rsb k v sep dat
-  | otherwise =
-      let !key   = pad_registers k
-          !rs0   = update (iv ()) (xor key (Exts.wordToWord32# 0x36363636##))
-          !inner = hash_vsb 64 rs0 v sep dat
-          !block = pad_registers_with_length inner
-          !rs1   = update (iv ()) (xor key (Exts.wordToWord32# 0x5C5C5C5C##))
-      in  update rs1 block
+_hmac_rsb k v sep dat =
+  let !key   = pad_registers k
+      !rs0   = update (iv ()) (xor key (Exts.wordToWord32# 0x36363636##))
+      !inner = _hash_vsb 64 rs0 v sep dat
+      !block = pad_registers_with_length inner
+      !rs1   = update (iv ()) (xor key (Exts.wordToWord32# 0x5C5C5C5C##))
+  in  update rs1 block
 {-# INLINABLE _hmac_rsb #-}
-
--- Hash (v || sep || dat) with initial state and extra prefix length.
-hash_vsb
-  :: Word64        -- ^ extra prefix length
-  -> Registers     -- ^ initial state
-  -> Registers     -- ^ v
-  -> Word8         -- ^ sep
-  -> BS.ByteString -- ^ dat
-  -> Registers
-hash_vsb el rs0 v sep dat@(BI.PS _ _ l)
-  | l >= 31 =
-      -- first block is complete
-      let !b0      = parse_vsb v sep dat
-          !rs1     = update rs0 b0
-          !rest    = BU.unsafeDrop 31 dat
-          !restLen = l - 31
-          !rs2     = _hash_blocks rs1 rest
-          !finLen  = restLen `rem` 64
-          !fin     = BU.unsafeDrop (restLen - finLen) rest
-          !total   = el + 33 + fi l
-      in  if   finLen < 56
-          then update rs2 (parse_pad1 fin total)
-          else let !(# pen, ult #) = parse_pad2 fin total
-               in  update (update rs2 pen) ult
-  | otherwise =
-      -- message < 64 bytes, goes straight to padding
-      let !total = el + 33 + fi l
-      in  if   33 + l < 56
-          then update rs0 (parse_pad1_vsb v sep dat total)
-          else let !(# pen, ult #) = parse_pad2_vsb v sep dat total
-               in  update (update rs0 pen) ult
-{-# INLINABLE hash_vsb #-}
 
 -- pointer-based IO functions ------------------------------------------------
 
 -- | HMAC(key, message) where both are register-sized.
 -- Writes 32-byte result to destination pointer.
 -- Uses ARM crypto extensions if available, otherwise software fallback.
-hmac_rr_unsafe
+_hmac_rr
   :: Ptr Word32    -- ^ destination (8 Word32s)
   -> Ptr Word32    -- ^ scratch block buffer (16 Word32s)
   -> Registers     -- ^ key
   -> Registers     -- ^ message
   -> IO ()
-hmac_rr_unsafe rp bp k m
+_hmac_rr rp bp k m
   | Arm.sha256_arm_available = Arm._hmac_rr rp bp k m
   | otherwise = do
       let !key   = pad_registers k
           !block = pad_registers_with_length m
           !rs    = _hmac_bb key block
       poke_registers rp rs
-{-# INLINABLE hmac_rr_unsafe #-}
+{-# INLINABLE _hmac_rr #-}
 
 -- | HMAC(key, v || sep || data).
 -- Writes 32-byte result to destination pointer.
