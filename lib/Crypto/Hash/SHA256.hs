@@ -124,31 +124,6 @@ _hmac k m =
   in  update rs1 block
 {-# INLINABLE _hmac #-}
 
--- XX these need testing
-
-_hmac_rm
-  :: Registers     -- ^ key
-  -> BS.ByteString -- ^ message
-  -> Registers
-_hmac_rm k m
-  | Arm.sha256_arm_available = Arm.hmac_rm k m
-  | otherwise =
-      let !key = pad_registers k
-      in  _hmac key m
-{-# INLINABLE _hmac_rm #-}
-
-_hmac_rr
-  :: Registers -- ^ key
-  -> Registers -- ^ message
-  -> Registers
-_hmac_rr k m
-  | Arm.sha256_arm_available = Arm.hmac_rr k m
-  | otherwise =
-      let !key   = pad_registers k
-          !block = pad_registers_with_length m
-      in  _hmac_bb key block
-{-# INLINABLE _hmac_rr #-}
-
 _hmac_bb
   :: Block     -- ^ key
   -> Block     -- ^ message

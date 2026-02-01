@@ -30,7 +30,6 @@ module Crypto.Hash.SHA256.Internal (
   -- * Serializing
   , cat
   , cat_into
-  , cat_into32
 
   -- * Hash function internals
   , update
@@ -528,21 +527,6 @@ iv _ = R
 cat :: Registers -> BS.ByteString
 cat rs = BI.unsafeCreate 32 (cat_into rs)
 {-# INLINABLE cat #-}
-
--- | Serialize SHA256 state to a pointer of word32's (big-endian).
-cat_into32 :: Registers -> Ptr Word32 -> IO ()
-cat_into32 (R h0 h1 h2 h3 h4 h5 h6 h7) (Ptr addr) = GHC.IO.IO $ \s0 ->
-  case Exts.writeWord32OffAddr# addr 0# h0 s0 of { s1 ->
-  case Exts.writeWord32OffAddr# addr 1# h1 s1 of { s2 ->
-  case Exts.writeWord32OffAddr# addr 2# h2 s2 of { s3 ->
-  case Exts.writeWord32OffAddr# addr 3# h3 s3 of { s4 ->
-  case Exts.writeWord32OffAddr# addr 4# h4 s4 of { s5 ->
-  case Exts.writeWord32OffAddr# addr 5# h5 s5 of { s6 ->
-  case Exts.writeWord32OffAddr# addr 6# h6 s6 of { s7 ->
-  case Exts.writeWord32OffAddr# addr 7# h7 s7 of { s8 ->
-  (# s8, () #)
-  }}}}}}}}
-{-# INLINE cat_into32 #-}
 
 -- | Serialize SHA256 state to a pointer (big-endian).
 cat_into :: Registers -> Ptr Word8 -> IO ()

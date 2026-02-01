@@ -93,24 +93,6 @@ update rp bp block = do
   c_sha256_block rp bp
 {-# INLINE update #-}
 
-data BoxedRegisters = BoxedRegisters !Registers
-
-update_pure :: Registers -> Block -> Registers
-update_pure r b =
-  let !(BoxedRegisters rs) = _update r b
-  in  rs
-{-# INLINE update_pure #-}
-
-_update :: Registers -> Block -> BoxedRegisters
-_update r b = unsafeDupablePerformIO $
-  allocaBytes 32 $ \rp ->
-  allocaBytes 64 $ \bp -> do
-    poke_registers rp r
-    poke_block bp b
-    c_sha256_block rp bp
-    pure (BoxedRegisters (peek_registers rp))
-{-# INLINE _update #-}
-
 -- api -----------------------------------------------------------------------
 
 -- | Are ARM +sha2 extensions available?
@@ -222,35 +204,6 @@ _hmac_bb rp bp k m = do
   update rp bp (xor k (Exts.wordToWord32# 0x5C5C5C5C##))
   update rp bp inner
 {-# INLINABLE _hmac_bb #-}
-
-hmac_rm :: Registers -> BS.ByteString -> Registers
-hmac_rm k m =
-  let !(BoxedRegisters rs) = _hmac_rm k m
-  in  rs
-{-# INLINABLE hmac_rm #-}
-
-_hmac_rm :: Registers -> BS.ByteString -> BoxedRegisters
-_hmac_rm k m = unsafeDupablePerformIO $
-  allocaBytes 32 $ \rp ->
-  allocaBytes 64 $ \bp -> do
-    let !key = pad_registers k
-    _hmac rp bp key m
-    pure (BoxedRegisters (peek_registers rp))
-{-# INLINABLE _hmac_rm #-}
-
-hmac_rr :: Registers -> Registers -> Registers
-hmac_rr k m =
-  let !(BoxedRegisters rs) = _hmac_rr_pure k m
-  in  rs
-{-# INLINABLE hmac_rr #-}
-
-_hmac_rr_pure :: Registers -> Registers -> BoxedRegisters
-_hmac_rr_pure k m = unsafeDupablePerformIO $
-  allocaBytes 32 $ \rp ->
-  allocaBytes 64 $ \bp -> do
-    _hmac_rr rp bp k m
-    pure (BoxedRegisters (peek_registers rp))
-{-# INLINABLE _hmac_rr_pure #-}
 
 -- | HMAC(key, v || sep || data) using ARM crypto extensions.
 -- Writes result to destination pointer.
