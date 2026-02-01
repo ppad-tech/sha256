@@ -64,11 +64,10 @@ benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
-  time                 67.70 ns   (66.08 ns .. 71.11 ns)
-                       0.992 R²   (0.979 R² .. 1.000 R²)
-  mean                 66.55 ns   (65.91 ns .. 68.79 ns)
-  std dev              3.919 ns   (720.2 ps .. 8.253 ns)
-  variance introduced by outliers: 78% (severely inflated)
+  time                 65.85 ns   (65.76 ns .. 65.95 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 65.90 ns   (65.80 ns .. 65.99 ns)
+  std dev              307.5 ps   (256.0 ps .. 392.9 ps)
 
   benchmarking ppad-sha256/HMAC-SHA256 (32B input)/hmac
   time                 135.7 ns   (135.2 ns .. 136.1 ns)
