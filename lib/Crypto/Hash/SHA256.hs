@@ -31,11 +31,6 @@ module Crypto.Hash.SHA256 (
   , Lazy.hmac_lazy
 
   -- low-level specialized primitives
-  , _hmac_rr
-  , _hmac_rm
-  , _hmac_rsb
-
-  -- pointer-based IO functions (for HMAC-DRBG)
   , hmac_rr_unsafe
   , hmac_rsb_unsafe
   ) where
