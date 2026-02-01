@@ -12,13 +12,13 @@
 --
 -- ARM crypto extension support for SHA-256.
 
-module Crypto.Hash.SHA256.Arm -- (
-  --  sha256_arm_available
-  --, hash
-  --, hash_with
-  --, hmac
-  --) where
-  where
+module Crypto.Hash.SHA256.Arm (
+    sha256_arm_available
+  , hash
+  , hmac
+  , _hmac_rr
+  , _hmac_rsb
+  ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BI
@@ -45,7 +45,6 @@ foreign import ccall unsafe "sha256_arm_available"
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 {-# INLINE fi #-}
-
 
 peek_registers
   :: Ptr Word32
@@ -205,8 +204,6 @@ _hmac_bb rp bp k m = do
   update rp bp inner
 {-# INLINABLE _hmac_bb #-}
 
--- | HMAC(key, v || sep || data) using ARM crypto extensions.
--- Writes result to destination pointer.
 _hmac_rsb
   :: Ptr Word32    -- ^ destination (8 Word32s)
   -> Ptr Word32    -- ^ scratch block buffer (16 Word32s)
@@ -226,8 +223,6 @@ _hmac_rsb rp bp k v sep dat = do
   update rp bp inner
 {-# INLINABLE _hmac_rsb #-}
 
--- | Hash (v || sep || dat) with ARM crypto extensions.
--- Assumes register state already initialized at rp.
 _hash_vsb
   :: Ptr Word32    -- ^ register state
   -> Ptr Word32    -- ^ block buffer
@@ -241,11 +236,9 @@ _hash_vsb rp bp el v sep dat@(BI.PS _ _ l)
       -- first block is complete: v || sep || dat[0:31]
       let !b0 = parse_vsb v sep dat
       update rp bp b0
-      -- hash remaining complete blocks from dat[31:]
       let !rest    = BU.unsafeDrop 31 dat
           !restLen = l - 31
       hash_blocks rp bp rest
-      -- handle final padding
       let !finLen = restLen `rem` 64
           !fin    = BU.unsafeDrop (restLen - finLen) rest
           !total  = el + 33 + fi l
