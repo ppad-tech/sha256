@@ -46,7 +46,6 @@ fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 {-# INLINE fi #-}
 
-
 peek_registers
   :: Ptr Word32
   -> Registers
