@@ -80,9 +80,9 @@ You should compile with the 'llvm' flag for maximum performance.
 
 ## Security
 
-This library aims at the maximum security achievable in a
-garbage-collected language under an optimizing compiler such as GHC, in
-which strict constant-timeness can be challenging to achieve.
+The security properties of this library have been examined and defended in
+a [security analysis](https://ppad.tech/security-analysis-sha2) at
+[ppad.tech](https://ppad.tech).
 
 The HMAC-SHA256 functions within pass all [Wycheproof vectors][wyche],
 as well as various other useful unit test vectors found around the
