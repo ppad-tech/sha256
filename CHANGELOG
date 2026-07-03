@@ -1,5 +1,10 @@
 # Changelog
 
+- Unreleased
+  * The constant-time 'Eq' on 'MAC' now folds over the two buffers
+    directly, rather than materialising an intermediate ByteString
+    holding their XOR on the heap. Semantics are unchanged.
+
 - 0.3.2 (2026-02-01)
   * The library has been refactored substantially to achieve greater
     control over heap allocation, particularly around HMAC calculation.

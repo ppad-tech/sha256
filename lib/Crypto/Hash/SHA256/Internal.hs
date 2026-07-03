@@ -83,8 +83,20 @@ instance Eq MAC where
   --
   --   Runs in variable-time only for invalid inputs.
   (MAC a@(BI.PS _ _ la)) == (MAC b@(BI.PS _ _ lb))
-    | la /= lb  = False
-    | otherwise = BS.foldl' (B..|.) 0 (BS.packZipWith B.xor a b) == 0
+      | la /= lb  = False
+      | otherwise = go 0 0
+    where
+      -- fused fold: OR the bytewise XORs into an accumulator
+      -- directly, rather than via packZipWith, so no intermediate
+      -- ByteString holding the (secret-derived) difference bytes
+      -- is ever materialised on the heap.
+      go :: Word8 -> Int -> Bool
+      go !acc !i
+        | i == la   = acc == 0
+        | otherwise =
+            let !x = BU.unsafeIndex a i
+                !y = BU.unsafeIndex b i
+            in  go (acc B..|. B.xor x y) (i + 1)
 
 -- | SHA256 block.
 newtype Block = Block
