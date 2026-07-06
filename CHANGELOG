@@ -1,5 +1,10 @@
 # Changelog
 
+- 0.3.4 (2026-07-06)
+  * Reverts the unrolled MAC comparison introduced in 0.3.3, which was
+    found to introduce timing variation on both aarch64 and x86-64 when
+    compiled via the LLVM backend (the NCG backend was unaffected).
+
 - 0.3.3 (2026-07-06)
   * The constant-time 'Eq' on 'MAC' now folds over the two buffers
     directly, rather than materialising an intermediate ByteString
