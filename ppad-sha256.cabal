@@ -40,6 +40,8 @@ library
       Crypto.Hash.SHA256.Arm
       Crypto.Hash.SHA256.Internal
       Crypto.Hash.SHA256.Lazy
+  other-modules:
+      Data.Barrier
   build-depends:
       base >= 4.9 && < 5
     , bytestring >= 0.9 && < 0.13
