@@ -1,8 +1,16 @@
 # Changelog
 
-- 0.3.5 (2026-07-24)
+- 0.3.5 (2026-10-10)
   * Further defends MAC comparison timing against "helpful" LLVM
     optimizations.
+  * Detects support for the ARM SHA2 extensions at runtime, rather than
+    assuming it on all aarch64 builds, which crashed on aarch64 CPUs
+    lacking them.
+  * The portable implementation now lives in an internal
+    'Crypto.Hash.SHA256.Pure' module, and
+    'Crypto.Hash.SHA256.Arm' is no longer exposed. Both are hidden
+    internal modules; the public API is unchanged.
+  * Improves 'hash_lazy' and 'hmac_lazy' performance.
 
 - 0.3.4 (2026-07-06)
   * Reverts the unrolled MAC comparison introduced in 0.3.3, which was
