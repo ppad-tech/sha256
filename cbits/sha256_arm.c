@@ -1,9 +1,16 @@
 #include <stdint.h>
 #include <string.h>
 
-#if defined(__aarch64__) && defined(__ARM_FEATURE_SHA2)
+#if defined(__aarch64__)
 
 #include <arm_neon.h>
+
+#if defined(__linux__)
+#include <sys/auxv.h>
+#ifndef HWCAP_SHA2
+#define HWCAP_SHA2 (1UL << 6)
+#endif
+#endif
 
 static const uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -31,7 +38,11 @@ static const uint32_t K[64] = {
  * block: pointer to 16 uint32_t words (already native endian)
  *
  * The state is updated in place.
+ *
+ * Compiled for the SHA2 extension only; callers must first check
+ * 'sha256_arm_available'.
  */
+__attribute__((target("+sha2")))
 void sha256_block_arm(uint32_t *state, const uint32_t *block) {
     /* Load current hash state */
     uint32x4_t abcd = vld1q_u32(&state[0]);
@@ -166,14 +177,25 @@ void sha256_block_arm(uint32_t *state, const uint32_t *block) {
     vst1q_u32(&state[4], efgh);
 }
 
-/* Return 1 if ARM SHA2 is available, 0 otherwise */
+/*
+ * Return 1 if the CPU implements the ARM SHA2 extension, 0 otherwise.
+ * Every Apple arm64 core implements it.  Elsewhere we only know how to
+ * ask Linux, and report 0 (selecting the pure Haskell fallback) on
+ * any other OS.
+ */
 int sha256_arm_available(void) {
+#if defined(__APPLE__)
     return 1;
+#elif defined(__linux__)
+    return (getauxval(AT_HWCAP) & HWCAP_SHA2) != 0;
+#else
+    return 0;
+#endif
 }
 
 #else
 
-/* Stub implementations when ARM SHA2 is not available */
+/* Stub implementations for non-aarch64 builds */
 void sha256_block_arm(uint32_t *state, const uint32_t *block) {
     (void)state;
     (void)block;
