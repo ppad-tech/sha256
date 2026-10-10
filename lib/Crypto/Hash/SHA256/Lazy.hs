@@ -24,13 +24,13 @@ module Crypto.Hash.SHA256.Lazy (
 import qualified Data.Bits as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
-import qualified Data.ByteString.Builder.Extra as BE
 import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Internal as BLI
 import Data.Word (Word64)
 import Foreign.ForeignPtr (plusForeignPtr)
 import Crypto.Hash.SHA256.Internal
+import qualified Crypto.Hash.SHA256.Pure as Pure
 
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
@@ -77,26 +77,19 @@ to_strict = BL.toStrict . BSB.toLazyByteString
 
 -- k such that (l + 1 + k) mod 64 = 56
 sol :: Word64 -> Word64
-sol l =
-  let r = 56 - fi l `rem` 64 - 1 :: Integer -- fi prevents underflow
-  in  fi (if r < 0 then r + 64 else r)
+sol l = (55 - l) B..&. 63 -- wraps mod 2^64, a multiple of 64
 
 -- RFC 6234 4.1 (lazy)
 pad_lazy :: BL.ByteString -> BL.ByteString
 pad_lazy (BL.toChunks -> m) = BL.fromChunks (walk 0 m) where
   walk !l bs = case bs of
     (c:cs) -> c : walk (l + fi (BS.length c)) cs
-    [] -> padding l (sol l) (BSB.word8 0x80)
+    [] -> [padding l]
 
-  padding l k bs
-    | k == 0 =
-          pure
-        . to_strict
-          -- more efficient for small builder
-        $ bs <> BSB.word64BE (l * 8)
-    | otherwise =
-        let nacc = bs <> BSB.word8 0x00
-        in  padding l (pred k) nacc
+  padding l = to_strict $
+       BSB.word8 0x80
+    <> BSB.byteString (BS.replicate (fi (sol l)) 0x00)
+    <> BSB.word64BE (l * 8)
 
 -- | Compute a condensed representation of a lazy bytestring via
 --   SHA-256.
@@ -137,36 +130,6 @@ hmac_lazy mk@(BI.PS _ _ l) text =
         step4 = hash_lazy step3
         step5 = BS.map (B.xor 0x5C) step1
         step6 = step5 <> step4
-    in  MAC (hash step6)
+    in  MAC (Pure.hash step6)
   where
-    hash bs = cat (go (iv ()) (pad bs)) where
-      go :: Registers -> BS.ByteString -> Registers
-      go !acc b
-        | BS.null b = acc
-        | otherwise = case unsafe_splitAt 64 b of
-            SSPair c r -> go (update acc (parse c 0)) r
-
-      pad m@(BI.PS _ _ (fi -> len))
-          | len < 128 = to_strict_small padded
-          | otherwise = to_strict padded
-        where
-          padded = BSB.byteString m
-                <> fill (sol len) (BSB.word8 0x80)
-                <> BSB.word64BE (len * 8)
-
-          to_strict_small = BL.toStrict . BE.toLazyByteStringWith
-            (BE.safeStrategy 128 BE.smallChunkSize) mempty
-
-          fill j !acc
-            | j `rem` 8 == 0 = loop64 j acc
-            | otherwise = loop8 j acc
-
-          loop64 j !acc
-            | j == 0 = acc
-            | otherwise = loop64 (j - 8) (acc <> BSB.word64BE 0x00)
-
-          loop8 j !acc
-            | j == 0 = acc
-            | otherwise = loop8 (pred j) (acc <> BSB.word8 0x00)
-
-    !(k, lk) = if l > 64 then (hash mk, 32) else (mk, l)
+    !(k, lk) = if l > 64 then (Pure.hash mk, 32) else (mk, l)
