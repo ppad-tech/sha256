@@ -98,13 +98,16 @@ _hash_blocks rs m@(BI.PS _ _ l) = loop rs 0 where
 
 -- hmac ----------------------------------------------------------------------
 
--- | Compute a condensed representation of a strict bytestring via
---   SHA-256.
+-- | Produce a message authentication code for a strict bytestring,
+--   based on the provided (strict, bytestring) key, via SHA-256.
 --
---   The 256-bit output digest is returned as a strict bytestring.
+--   The 256-bit MAC is returned as a strict bytestring.
 --
---   >>> hash "strict bytestring input"
---   "<strict 256-bit message digest>"
+--   Per RFC 2104, the key /should/ be a minimum of 32 bytes long. Keys
+--   exceeding 64 bytes in length will first be hashed (via SHA-256).
+--
+--   >>> hmac "strict bytestring key" "strict bytestring input"
+--   "<strict 256-bit MAC>"
 hmac :: BS.ByteString -> BS.ByteString -> MAC
 hmac k m
   | Arm.sha256_arm_available = MAC (Arm.hmac k m)
