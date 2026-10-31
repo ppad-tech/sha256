@@ -57,10 +57,11 @@ Haddocks (API documentation, etc.) are hosted at
 
 ## Performance
 
-The aim is best-in-class performance. Current benchmark figures on an
-M4 Silicon MacBook Air, where we avail of hardware acceleration via
-ARM cryptography extensions, look like (use `cabal bench` to run the
-benchmark suite):
+The aim is best-in-class performance. We avail of hardware
+acceleration via the ARM SHA2 extensions on aarch64, and the x86 SHA
+extensions on x86_64, whenever the CPU supports them. Current benchmark
+figures on an M4 Silicon MacBook Air look like (use `cabal bench` to run
+the benchmark suite):
 
 ```
   benchmarking ppad-sha256/SHA256 (32B input)/hash
