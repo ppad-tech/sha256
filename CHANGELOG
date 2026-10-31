@@ -1,5 +1,11 @@
 # Changelog
 
+- 0.3.6 (2026-10-31)
+  * Uses the x86 SHA extensions on x86_64 CPUs that support them,
+    detected at runtime, falling back to the pure Haskell
+    implementation elsewhere. 'hash' and 'hmac' on such CPUs are
+    roughly 2-4x faster.
+
 - 0.3.5 (2026-10-10)
   * Further defends MAC comparison timing against "helpful" LLVM
     optimizations.
