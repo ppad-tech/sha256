@@ -12,7 +12,7 @@
 -- [2104](https://datatracker.ietf.org/doc/html/rfc2104).
 --
 -- The 'hash' and 'hmac' functions will use primitive instructions from
--- the ARM cryptographic extensions via FFI if they're available, and
+-- the ARM SHA2 or x86 SHA extensions via FFI if they're available, and
 -- will otherwise use a pure Haskell implementation.
 
 module Crypto.Hash.SHA256 (
@@ -33,7 +33,7 @@ module Crypto.Hash.SHA256 (
 import qualified Data.ByteString as BS
 import Data.Word (Word8, Word32)
 import Foreign.Ptr (Ptr)
-import qualified Crypto.Hash.SHA256.Arm as Arm
+import qualified Crypto.Hash.SHA256.Native as Native
 import Crypto.Hash.SHA256.Internal (MAC(..), Registers)
 import qualified Crypto.Hash.SHA256.Lazy as Lazy
 import qualified Crypto.Hash.SHA256.Pure as Pure
@@ -49,7 +49,7 @@ import qualified Crypto.Hash.SHA256.Pure as Pure
 --   "<strict 256-bit message digest>"
 hash :: BS.ByteString -> BS.ByteString
 hash m
-  | Arm.sha256_arm_available = Arm.hash m
+  | Native.sha256_native_available = Native.hash m
   | otherwise = Pure.hash m
 {-# INLINABLE hash #-}
 
@@ -67,7 +67,7 @@ hash m
 --   "<strict 256-bit MAC>"
 hmac :: BS.ByteString -> BS.ByteString -> MAC
 hmac k m
-  | Arm.sha256_arm_available = MAC (Arm.hmac k m)
+  | Native.sha256_native_available = MAC (Native.hmac k m)
   | otherwise = MAC (Pure.hmac k m)
 {-# INLINABLE hmac #-}
 
@@ -84,7 +84,7 @@ _hmac_rr
   -> Registers     -- ^ message
   -> IO ()
 _hmac_rr rp bp k m
-  | Arm.sha256_arm_available = Arm._hmac_rr rp bp k m
+  | Native.sha256_native_available = Native._hmac_rr rp bp k m
   | otherwise = Pure._hmac_rr rp bp k m
 {-# INLINABLE _hmac_rr #-}
 
@@ -102,6 +102,6 @@ _hmac_rsb
   -> BS.ByteString -- ^ data
   -> IO ()
 _hmac_rsb rp bp k v sep dat
-  | Arm.sha256_arm_available = Arm._hmac_rsb rp bp k v sep dat
+  | Native.sha256_native_available = Native._hmac_rsb rp bp k v sep dat
   | otherwise = Pure._hmac_rsb rp bp k v sep dat
 {-# INLINABLE _hmac_rsb #-}

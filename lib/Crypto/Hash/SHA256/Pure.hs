@@ -10,7 +10,7 @@
 -- Maintainer: Jared Tobin <jared@ppad.tech>
 --
 -- Pure Haskell SHA-256 and HMAC-SHA256 implementations for strict
--- ByteStrings, used when the ARM cryptographic extensions are
+-- ByteStrings, used when hardware SHA-256 instructions are
 -- unavailable.
 
 module Crypto.Hash.SHA256.Pure (
