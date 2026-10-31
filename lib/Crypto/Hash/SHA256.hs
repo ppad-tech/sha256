@@ -12,7 +12,7 @@
 -- [2104](https://datatracker.ietf.org/doc/html/rfc2104).
 --
 -- The 'hash' and 'hmac' functions will use primitive instructions from
--- the ARM cryptographic extensions via FFI if they're available, and
+-- the ARM SHA2 or x86 SHA extensions via FFI if they're available, and
 -- will otherwise use a pure Haskell implementation.
 
 module Crypto.Hash.SHA256 (

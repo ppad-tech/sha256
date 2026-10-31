@@ -6,7 +6,7 @@
 
 A Haskell implementation of SHA-256 and HMAC-SHA256 on strict and lazy
 ByteStrings, as specified by RFC's [6234][r6234] and [2104][r2104], that
-uses ARM SHA2 intrinsics when available.
+uses ARM SHA2 or x86 SHA intrinsics when available.
 
 ## Usage
 

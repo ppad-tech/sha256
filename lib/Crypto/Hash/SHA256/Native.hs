@@ -10,7 +10,8 @@
 -- License: MIT
 -- Maintainer: Jared Tobin <jared@ppad.tech>
 --
--- ARM crypto extension support for SHA-256.
+-- Hardware-accelerated SHA-256, via the ARM SHA2 or x86 SHA
+-- extensions.
 
 module Crypto.Hash.SHA256.Native (
     sha256_native_available

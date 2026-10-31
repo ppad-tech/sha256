@@ -12,6 +12,19 @@
 #endif
 #endif
 
+#elif defined(__x86_64__)
+
+#include <cpuid.h>
+#include <immintrin.h>
+
+#ifndef bit_SHA
+#define bit_SHA (1 << 29)
+#endif
+
+#endif
+
+#if defined(__aarch64__) || defined(__x86_64__)
+
 static const uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
     0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -30,6 +43,10 @@ static const uint32_t K[64] = {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
+
+#endif
+
+#if defined(__aarch64__)
 
 /*
  * Process one 64-byte block using ARM SHA256 crypto instructions.
@@ -193,9 +210,190 @@ int sha256_native_available(void) {
 #endif
 }
 
+#elif defined(__x86_64__)
+
+/*
+ * Four rounds.  'sha256rnds2' does two: it takes the (c,d,g,h) and
+ * (a,b,e,f) halves of the state, and two message-plus-constant words in
+ * the low lanes of its third argument, and returns the new (a,b,e,f).
+ * The old (a,b,e,f) is then the new (c,d,g,h), so a second call with
+ * the halves swapped does the next two.
+ */
+#define ROUNDS4(abef, cdgh, msg)                           \
+    do {                                                   \
+        cdgh = _mm_sha256rnds2_epu32(cdgh, abef, msg);     \
+        msg  = _mm_shuffle_epi32(msg, 0x0e);               \
+        abef = _mm_sha256rnds2_epu32(abef, cdgh, msg);     \
+    } while (0)
+
+/*
+ * Process one 64-byte block using x86 SHA instructions.
+ *
+ * state: pointer to 8 uint32_t words (a,b,c,d,e,f,g,h)
+ * block: pointer to 16 uint32_t words (already native endian)
+ *
+ * The state is updated in place.
+ *
+ * Compiled for the SHA and SSE4.1 extensions only; callers must first
+ * check 'sha256_native_available'.
+ *
+ * Lane orders in comments are written from highest lane to lowest.
+ */
+__attribute__((target("sha,sse4.1")))
+void sha256_block_native(uint32_t *state, const uint32_t *block) {
+    __m128i abef, cdgh, abef_orig, cdgh_orig;
+    __m128i m0, m1, m2, m3, msg, tmp;
+
+    /* Load current hash state, rearranging it for the SHA instructions */
+    tmp  = _mm_loadu_si128((const __m128i *)&state[0]); /* d c b a */
+    cdgh = _mm_loadu_si128((const __m128i *)&state[4]); /* h g f e */
+    tmp  = _mm_shuffle_epi32(tmp, 0xb1);                /* c d a b */
+    cdgh = _mm_shuffle_epi32(cdgh, 0x1b);               /* e f g h */
+    abef = _mm_alignr_epi8(tmp, cdgh, 8);               /* a b e f */
+    cdgh = _mm_blend_epi16(cdgh, tmp, 0xf0);            /* c d g h */
+
+    /* Save original for final addition */
+    abef_orig = abef;
+    cdgh_orig = cdgh;
+
+    /* Load message (already native endian) */
+    m0 = _mm_loadu_si128((const __m128i *)&block[0]);
+    m1 = _mm_loadu_si128((const __m128i *)&block[4]);
+    m2 = _mm_loadu_si128((const __m128i *)&block[8]);
+    m3 = _mm_loadu_si128((const __m128i *)&block[12]);
+
+    /* Rounds 0-3 */
+    msg = _mm_add_epi32(m0, _mm_loadu_si128((const __m128i *)&K[0]));
+    ROUNDS4(abef, cdgh, msg);
+
+    /* Rounds 4-7 */
+    msg = _mm_add_epi32(m1, _mm_loadu_si128((const __m128i *)&K[4]));
+    ROUNDS4(abef, cdgh, msg);
+    m0 = _mm_sha256msg1_epu32(m0, m1);
+
+    /* Rounds 8-11 */
+    msg = _mm_add_epi32(m2, _mm_loadu_si128((const __m128i *)&K[8]));
+    ROUNDS4(abef, cdgh, msg);
+    m1 = _mm_sha256msg1_epu32(m1, m2);
+
+    /* Rounds 12-15 */
+    msg = _mm_add_epi32(m3, _mm_loadu_si128((const __m128i *)&K[12]));
+    ROUNDS4(abef, cdgh, msg);
+    m0 = _mm_add_epi32(m0, _mm_alignr_epi8(m3, m2, 4));
+    m0 = _mm_sha256msg2_epu32(m0, m3);
+    m2 = _mm_sha256msg1_epu32(m2, m3);
+
+    /* Rounds 16-19 */
+    msg = _mm_add_epi32(m0, _mm_loadu_si128((const __m128i *)&K[16]));
+    ROUNDS4(abef, cdgh, msg);
+    m1 = _mm_add_epi32(m1, _mm_alignr_epi8(m0, m3, 4));
+    m1 = _mm_sha256msg2_epu32(m1, m0);
+    m3 = _mm_sha256msg1_epu32(m3, m0);
+
+    /* Rounds 20-23 */
+    msg = _mm_add_epi32(m1, _mm_loadu_si128((const __m128i *)&K[20]));
+    ROUNDS4(abef, cdgh, msg);
+    m2 = _mm_add_epi32(m2, _mm_alignr_epi8(m1, m0, 4));
+    m2 = _mm_sha256msg2_epu32(m2, m1);
+    m0 = _mm_sha256msg1_epu32(m0, m1);
+
+    /* Rounds 24-27 */
+    msg = _mm_add_epi32(m2, _mm_loadu_si128((const __m128i *)&K[24]));
+    ROUNDS4(abef, cdgh, msg);
+    m3 = _mm_add_epi32(m3, _mm_alignr_epi8(m2, m1, 4));
+    m3 = _mm_sha256msg2_epu32(m3, m2);
+    m1 = _mm_sha256msg1_epu32(m1, m2);
+
+    /* Rounds 28-31 */
+    msg = _mm_add_epi32(m3, _mm_loadu_si128((const __m128i *)&K[28]));
+    ROUNDS4(abef, cdgh, msg);
+    m0 = _mm_add_epi32(m0, _mm_alignr_epi8(m3, m2, 4));
+    m0 = _mm_sha256msg2_epu32(m0, m3);
+    m2 = _mm_sha256msg1_epu32(m2, m3);
+
+    /* Rounds 32-35 */
+    msg = _mm_add_epi32(m0, _mm_loadu_si128((const __m128i *)&K[32]));
+    ROUNDS4(abef, cdgh, msg);
+    m1 = _mm_add_epi32(m1, _mm_alignr_epi8(m0, m3, 4));
+    m1 = _mm_sha256msg2_epu32(m1, m0);
+    m3 = _mm_sha256msg1_epu32(m3, m0);
+
+    /* Rounds 36-39 */
+    msg = _mm_add_epi32(m1, _mm_loadu_si128((const __m128i *)&K[36]));
+    ROUNDS4(abef, cdgh, msg);
+    m2 = _mm_add_epi32(m2, _mm_alignr_epi8(m1, m0, 4));
+    m2 = _mm_sha256msg2_epu32(m2, m1);
+    m0 = _mm_sha256msg1_epu32(m0, m1);
+
+    /* Rounds 40-43 */
+    msg = _mm_add_epi32(m2, _mm_loadu_si128((const __m128i *)&K[40]));
+    ROUNDS4(abef, cdgh, msg);
+    m3 = _mm_add_epi32(m3, _mm_alignr_epi8(m2, m1, 4));
+    m3 = _mm_sha256msg2_epu32(m3, m2);
+    m1 = _mm_sha256msg1_epu32(m1, m2);
+
+    /* Rounds 44-47 */
+    msg = _mm_add_epi32(m3, _mm_loadu_si128((const __m128i *)&K[44]));
+    ROUNDS4(abef, cdgh, msg);
+    m0 = _mm_add_epi32(m0, _mm_alignr_epi8(m3, m2, 4));
+    m0 = _mm_sha256msg2_epu32(m0, m3);
+    m2 = _mm_sha256msg1_epu32(m2, m3);
+
+    /* Rounds 48-51 */
+    msg = _mm_add_epi32(m0, _mm_loadu_si128((const __m128i *)&K[48]));
+    ROUNDS4(abef, cdgh, msg);
+    m1 = _mm_add_epi32(m1, _mm_alignr_epi8(m0, m3, 4));
+    m1 = _mm_sha256msg2_epu32(m1, m0);
+    m3 = _mm_sha256msg1_epu32(m3, m0);
+
+    /* Rounds 52-55 */
+    msg = _mm_add_epi32(m1, _mm_loadu_si128((const __m128i *)&K[52]));
+    ROUNDS4(abef, cdgh, msg);
+    m2 = _mm_add_epi32(m2, _mm_alignr_epi8(m1, m0, 4));
+    m2 = _mm_sha256msg2_epu32(m2, m1);
+
+    /* Rounds 56-59 */
+    msg = _mm_add_epi32(m2, _mm_loadu_si128((const __m128i *)&K[56]));
+    ROUNDS4(abef, cdgh, msg);
+    m3 = _mm_add_epi32(m3, _mm_alignr_epi8(m2, m1, 4));
+    m3 = _mm_sha256msg2_epu32(m3, m2);
+
+    /* Rounds 60-63 */
+    msg = _mm_add_epi32(m3, _mm_loadu_si128((const __m128i *)&K[60]));
+    ROUNDS4(abef, cdgh, msg);
+
+    /* Add original state back */
+    abef = _mm_add_epi32(abef, abef_orig);
+    cdgh = _mm_add_epi32(cdgh, cdgh_orig);
+
+    /* Restore the state's original order and store result */
+    tmp  = _mm_shuffle_epi32(abef, 0x1b);               /* f e b a */
+    cdgh = _mm_shuffle_epi32(cdgh, 0xb1);               /* d c h g */
+    _mm_storeu_si128((__m128i *)&state[0],
+                     _mm_blend_epi16(tmp, cdgh, 0xf0)); /* d c b a */
+    _mm_storeu_si128((__m128i *)&state[4],
+                     _mm_alignr_epi8(cdgh, tmp, 8));    /* h g f e */
+}
+
+/*
+ * Return 1 if the CPU implements the x86 SHA extensions and the SSSE3
+ * and SSE4.1 instructions used alongside them, 0 otherwise.
+ */
+int sha256_native_available(void) {
+    unsigned int eax, ebx, ecx, edx;
+
+    if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
+        return 0;
+    if (!(ecx & bit_SSSE3) || !(ecx & bit_SSE4_1))
+        return 0;
+    if (!__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx))
+        return 0;
+    return (ebx & bit_SHA) != 0;
+}
+
 #else
 
-/* Stub implementations for non-aarch64 builds */
+/* Stub implementations for builds without hardware support */
 void sha256_block_native(uint32_t *state, const uint32_t *block) {
     (void)state;
     (void)block;
