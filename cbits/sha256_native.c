@@ -40,10 +40,10 @@ static const uint32_t K[64] = {
  * The state is updated in place.
  *
  * Compiled for the SHA2 extension only; callers must first check
- * 'sha256_arm_available'.
+ * 'sha256_native_available'.
  */
 __attribute__((target("+sha2")))
-void sha256_block_arm(uint32_t *state, const uint32_t *block) {
+void sha256_block_native(uint32_t *state, const uint32_t *block) {
     /* Load current hash state */
     uint32x4_t abcd = vld1q_u32(&state[0]);
     uint32x4_t efgh = vld1q_u32(&state[4]);
@@ -183,7 +183,7 @@ void sha256_block_arm(uint32_t *state, const uint32_t *block) {
  * ask Linux, and report 0 (selecting the pure Haskell fallback) on
  * any other OS.
  */
-int sha256_arm_available(void) {
+int sha256_native_available(void) {
 #if defined(__APPLE__)
     return 1;
 #elif defined(__linux__)
@@ -196,13 +196,13 @@ int sha256_arm_available(void) {
 #else
 
 /* Stub implementations for non-aarch64 builds */
-void sha256_block_arm(uint32_t *state, const uint32_t *block) {
+void sha256_block_native(uint32_t *state, const uint32_t *block) {
     (void)state;
     (void)block;
     /* Should never be called - use pure Haskell fallback */
 }
 
-int sha256_arm_available(void) {
+int sha256_native_available(void) {
     return 0;
 }
 

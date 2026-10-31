@@ -5,15 +5,15 @@
 {-# LANGUAGE UnboxedTuples #-}
 
 -- |
--- Module: Crypto.Hash.SHA256.Arm
+-- Module: Crypto.Hash.SHA256.Native
 -- Copyright: (c) 2024 Jared Tobin
 -- License: MIT
 -- Maintainer: Jared Tobin <jared@ppad.tech>
 --
 -- ARM crypto extension support for SHA-256.
 
-module Crypto.Hash.SHA256.Arm (
-    sha256_arm_available
+module Crypto.Hash.SHA256.Native (
+    sha256_native_available
   , hash
   , hmac
   , _hmac_rr
@@ -35,11 +35,11 @@ import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- ffi ------------------------------------------------------------------------
 
-foreign import ccall unsafe "sha256_block_arm"
+foreign import ccall unsafe "sha256_block_native"
   c_sha256_block :: Ptr Word32 -> Ptr Word32 -> IO ()
 
-foreign import ccall unsafe "sha256_arm_available"
-  c_sha256_arm_available :: IO CInt
+foreign import ccall unsafe "sha256_native_available"
+  c_sha256_native_available :: IO CInt
 
 -- utilities ------------------------------------------------------------------
 
@@ -95,10 +95,10 @@ update rp bp block = do
 
 -- api -----------------------------------------------------------------------
 
--- | Are ARM +sha2 extensions available?
-sha256_arm_available :: Bool
-sha256_arm_available = unsafeDupablePerformIO c_sha256_arm_available /= 0
-{-# NOINLINE sha256_arm_available #-}
+-- | Are hardware SHA-256 instructions available?
+sha256_native_available :: Bool
+sha256_native_available = unsafeDupablePerformIO c_sha256_native_available /= 0
+{-# NOINLINE sha256_native_available #-}
 
 hash
   :: BS.ByteString
@@ -205,7 +205,7 @@ _hmac_bb rp bp k m = do
   update rp bp inner
 {-# INLINABLE _hmac_bb #-}
 
--- | HMAC(key, v || sep || data) using ARM crypto extensions.
+-- | HMAC(key, v || sep || data) using hardware SHA-256 instructions.
 -- Writes result to destination pointer.
 _hmac_rsb
   :: Ptr Word32    -- ^ destination (8 Word32s)
@@ -226,7 +226,7 @@ _hmac_rsb rp bp k v sep dat = do
   update rp bp inner
 {-# INLINABLE _hmac_rsb #-}
 
--- | Hash (v || sep || dat) with ARM crypto extensions.
+-- | Hash (v || sep || dat) with hardware SHA-256 instructions.
 -- Assumes register state already initialized at rp.
 _hash_vsb
   :: Ptr Word32    -- ^ register state
